@@ -1,7 +1,8 @@
 /*
   색, 글꼴, 간격은 첫 버전의 체계를 그대로 쓴다.
   나중에 더한 토큰: --track, --side-w(대시보드 개편), --field(입력칸 테두리 대비 3:1),
-  --xl-*(Pending Order 표의 줄 배경. 내려받는 엑셀의 배경색과 같은 값).
+  --xl-*(Pending Order 표의 줄 배경. 내부 검토용 엑셀의 배경색과 같은 값. 고객 발송용 엑셀에는 색이 없다).
+  가독성 개선 때는 토큰을 더하지 않고 --side-w 값만 줄였다(1440px에서 표의 모든 열이 보이도록).
 */
 :root {
   --blue-green: #007082;
@@ -21,7 +22,7 @@
   --xl-new: #e2f0d9;
   --xl-cancelled: #ededed;
   --radius: 8px;
-  --side-w: 312px;
+  --side-w: 280px;
 }
 
 * {
@@ -57,7 +58,8 @@ p {
 }
 
 select,
-input[type='text'] {
+input[type='text'],
+input[type='number'] {
   height: 34px;
   padding: 0 10px;
   border: 1px solid var(--field);
@@ -102,6 +104,11 @@ summary:focus-visible,
   border-right: 1px solid var(--line);
 }
 
+/* 창이 낮아도 구역이 찌그러지지 않고 사이드바가 스크롤되게 한다 */
+.side > * {
+  flex: none;
+}
+
 .side-head {
   padding: 16px 20px 14px;
   background: var(--blue-green);
@@ -123,7 +130,7 @@ summary:focus-visible,
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 14px 20px;
+  padding: 12px 20px;
   background: var(--white);
   border-bottom: 1px solid var(--line);
 }
@@ -156,13 +163,14 @@ summary:focus-visible,
 
 .send-opts legend {
   padding: 0;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 
 .field-row {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
   font-size: 13px;
   color: var(--gray);
 }
@@ -170,6 +178,23 @@ summary:focus-visible,
 .field-row select,
 .field-row input {
   width: 100%;
+  min-width: 0;
+  height: 32px;
+  padding: 0 8px;
+  font-size: 13px;
+}
+
+/* 다운로드 버튼은 사이드바를 스크롤해도 아래에 붙어 있다 */
+.side-foot {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 4px -20px -12px;
+  padding: 10px 20px 12px;
+  background: var(--white);
+  border-top: 1px solid var(--line);
 }
 
 .field-label {
@@ -179,7 +204,7 @@ summary:focus-visible,
 
 #ship-to {
   width: 100%;
-  margin-top: -6px;
+  margin-top: -4px;
 }
 
 /* 작업 순서: 올리기 → 검토 → 내려받기. 상태는 색과 함께 글자로도 적는다 */
@@ -257,11 +282,11 @@ summary:focus-visible,
 .main {
   min-width: 0;
   max-width: 1680px;
-  padding: 24px 28px 64px;
+  padding: 20px 24px 64px;
 }
 
 .main-head {
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
 .main-head h2 {
@@ -290,7 +315,7 @@ summary:focus-visible,
   display: flex;
   flex-direction: column;
   gap: 2px;
-  min-height: 72px;
+  min-height: 64px;
   padding: 10px 12px;
   background: var(--white);
   border: 1.5px dashed var(--field);
@@ -355,8 +380,13 @@ summary:focus-visible,
   color: var(--ink);
 }
 
+/* 무엇으로 읽었는지는 칸 머리("이전 파일") 오른쪽에 적어 한 줄을 아낀다 */
 .drop-kind {
+  position: absolute;
+  top: 10px;
+  right: 12px;
   color: var(--blue-green-dark);
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -525,10 +555,7 @@ summary:focus-visible,
   color: var(--gray);
 }
 
-.card.is-alert {
-  border-color: var(--red);
-}
-
+/* 지연은 숫자만 빨갛게(알림). 테두리와 바탕까지 칠하는 것은 할 일이 남은 "사유 미입력" 카드뿐이다 */
 .card.is-alert .card-value {
   color: var(--red);
 }
@@ -537,8 +564,13 @@ summary:focus-visible,
   cursor: pointer;
 }
 
-.card-btn .card-sub {
+.card-act {
+  margin-top: 2px;
+  color: var(--blue-green-dark);
+  font-size: 13px;
+  font-weight: 700;
   text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .card-btn:hover {
@@ -546,14 +578,36 @@ summary:focus-visible,
   background: var(--bg);
 }
 
-.card-btn.is-alert:hover,
-.card-btn.is-alert[aria-pressed='true'] {
+.card-btn.is-todo {
   border-color: var(--red);
   background: var(--red-tint);
 }
 
-.card-btn[aria-pressed='true'] {
-  box-shadow: inset 0 0 0 1px currentColor;
+.card-btn.is-todo .card-sub {
+  color: var(--ink);
+}
+
+.card-btn.is-todo .card-act {
+  color: var(--red);
+}
+
+.card-btn.is-todo:hover,
+.card-btn.is-todo[aria-pressed='true'] {
+  box-shadow: inset 0 0 0 1px var(--red);
+}
+
+.card-btn.is-done {
+  border-color: var(--blue-green);
+  background: var(--blue-green-tint);
+}
+
+.card-btn.is-done .card-value,
+.card-btn.is-done .card-sub {
+  color: var(--blue-green-dark);
+}
+
+.card-btn:not(.is-todo)[aria-pressed='true'] {
+  box-shadow: inset 0 0 0 1px var(--blue-green);
 }
 
 /* ---------- 패널, 차트 ---------- */
@@ -917,6 +971,21 @@ summary:focus-visible,
   font-weight: 700;
 }
 
+/* 도구 탭(엑셀 시트가 아닌 것): 시트 탭과 띄우고, 상자 대신 밑줄로 선택을 표시한다 */
+.tab-tool {
+  border-radius: 0;
+}
+
+.tab:not(.tab-tool) + .tab-tool {
+  margin-left: 16px;
+}
+
+.tab-tool[aria-selected='true'] {
+  border-color: transparent;
+  background: none;
+  box-shadow: inset 0 -3px 0 var(--blue-green);
+}
+
 .cell-todo {
   color: var(--gray);
   font-size: 12px;
@@ -957,7 +1026,83 @@ summary:focus-visible,
 }
 
 .panel-lead {
+  margin-bottom: 8px;
   color: var(--gray);
+  font-size: 12px;
+}
+
+/* 범례 한 줄: 줄 색의 뜻, 엑셀에는 어떻게 나가는지, 접어 둔 설명 */
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  margin-bottom: 8px;
+  color: var(--gray);
+  font-size: 12px;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.sw {
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--field);
+  border-radius: 3px;
+}
+
+.sw-changed {
+  background: var(--xl-changed);
+}
+.sw-new {
+  background: var(--xl-new);
+}
+.sw-cancelled {
+  background: var(--xl-cancelled);
+}
+
+#review[data-style='customer'] .legend-note[data-for='review'],
+#review[data-style='review'] .legend-note[data-for='customer'] {
+  display: none;
+}
+
+.help {
+  margin-left: auto;
+}
+
+.help[open] {
+  flex-basis: 100%;
+}
+
+.help > summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  border-radius: 4px;
+  color: var(--blue-green-dark);
+  list-style: none;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.help > summary::-webkit-details-marker {
+  display: none;
+}
+
+.help > p {
+  max-width: 78ch;
+  margin-top: 4px;
+  padding: 8px 12px;
+  background: var(--bg);
+  border-radius: 6px;
+  color: var(--ink);
   font-size: 13px;
 }
 
@@ -985,21 +1130,88 @@ summary:focus-visible,
 .table-wrap {
   max-height: calc(100vh - 96px);
   overflow: auto;
+  scrollbar-width: thin;
   border: 1px solid var(--light-gray);
   border-radius: 6px;
 }
 
 .po-table {
   width: 100%;
-  min-width: 1130px;
   border-collapse: separate;
   border-spacing: 0;
   font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
 
-.po-table.no-delivery {
-  min-width: 1050px;
+/*
+  Pending Order 표는 열 너비를 정해 둔다. 1440px 창(표 영역 약 1,060px)에서 가로 스크롤 없이
+  모든 열이 보이도록 고정 열의 합을 970px로 맞추고, 남는 폭은 PART NAME이 갖는다.
+*/
+.pending-table {
+  min-width: 1040px;
+  table-layout: fixed;
+}
+
+.pending-table.no-delivery {
+  min-width: 968px;
+}
+
+.pending-table th.c-mark {
+  width: 92px;
+}
+.pending-table th.c-order,
+.pending-table th.c-delivery {
+  width: 72px;
+}
+.pending-table th.c-prev,
+.pending-table th.c-exw {
+  width: 76px;
+}
+.pending-table th.c-ship {
+  width: 80px;
+}
+.pending-table th.c-po {
+  width: 128px;
+}
+.pending-table th.c-partno {
+  width: 84px;
+}
+.pending-table th.c-qty {
+  width: 64px;
+}
+.pending-table th.c-unit {
+  width: 38px;
+}
+.pending-table th.c-remarks {
+  width: 196px;
+}
+
+/* 넓은 모니터에서는 남는 폭을 PART NAME 혼자 갖지 않게 나눠 준다 */
+@media (min-width: 1680px) {
+  .pending-table th.c-order,
+  .pending-table th.c-delivery,
+  .pending-table th.c-prev,
+  .pending-table th.c-exw {
+    width: 92px;
+  }
+  .pending-table th.c-ship {
+    width: 112px;
+  }
+  .pending-table th.c-po {
+    width: 180px;
+  }
+  .pending-table th.c-partno {
+    width: 124px;
+  }
+  .pending-table th.c-qty {
+    width: 84px;
+  }
+  .pending-table th.c-unit {
+    width: 48px;
+  }
+  .pending-table th.c-remarks {
+    width: 300px;
+  }
 }
 
 .po-table.no-delivery .c-delivery {
@@ -1038,8 +1250,6 @@ summary:focus-visible,
 .po-table .c-remarks {
   position: sticky;
   right: 0;
-  width: 228px;
-  min-width: 228px;
   border-right: 0;
   border-left: 1px solid var(--light-gray);
 }
@@ -1063,26 +1273,87 @@ summary:focus-visible,
   white-space: nowrap;
 }
 
-.po-table .c-mark {
+.sh-table .c-mark {
   width: 88px;
 }
 
-.po-table td.c-po {
-  min-width: 132px;
+.sh-table .c-remarks,
+.sh-table th:last-child {
+  min-width: 160px;
+}
+
+.po-table td.c-po,
+.po-table td.c-partno,
+.po-table td.c-name,
+.po-table td.c-ship {
+  overflow-wrap: anywhere;
+}
+
+.sh-table td.c-po {
+  font-weight: 700;
+}
+
+.po-no {
+  font-weight: 700;
+}
+
+/* 날짜 칸은 옆 여백을 줄여 10자가 한 줄에 들어가게 한다 */
+.pending-table td.c-order,
+.pending-table td.c-delivery,
+.pending-table td.c-prev,
+.pending-table td.c-exw,
+.pending-table td.c-unit {
+  padding-left: 2px;
+  padding-right: 2px;
+}
+
+/* 연도는 흐리게, 월-일이 먼저 읽히게 */
+.yr {
+  color: var(--gray);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+/* 주문일과 희망 납기는 참고 정보라 한 단계 가볍게. 눈은 Previous → Updated EXW로 간다 */
+.po-table td.c-order,
+.po-table td.c-delivery,
+.po-table td.c-unit {
+  color: var(--gray);
+}
+
+/* 바뀌지 않은 줄의 Previous EXW는 Updated와 같은 값이라 흐리게 둔다 */
+.pending-table td.c-prev:not(.is-changed) {
+  color: var(--gray);
+}
+
+.po-table td.c-qty {
+  font-weight: 700;
+}
+
+/* PO 아래의 보조 줄: 재등록 표시, 비교 버튼 */
+.po-sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+  margin-top: 2px;
+}
+
+/* 전체 고객사를 볼 때 목록에 붙이는 납품처 이름 */
+.ship-of {
+  display: inline-block;
+  margin-right: 4px;
+  padding: 0 6px;
+  border: 1px solid var(--light-gray);
+  border-radius: 4px;
+  background: var(--white);
+  color: var(--gray);
+  font-size: 12px;
   font-weight: 700;
   overflow-wrap: anywhere;
 }
 
-.po-table td.c-partno {
-  overflow-wrap: anywhere;
-}
-
-.po-table td.c-name {
-  min-width: 150px;
-  overflow-wrap: anywhere;
-}
-
-/* 엑셀과 같은 표시: 바뀐 줄은 노란 배경, 신규는 초록 배경, 바뀐 EXW는 빨간 굵은 글자 */
+/* 검토용 표시: 바뀐 줄은 노란 배경, 신규는 초록 배경, 바뀐 EXW는 빨간 굵은 글자(내부 검토용 엑셀과 같다) */
 .po-table .st-changed td {
   background: var(--xl-changed);
 }
@@ -1114,7 +1385,26 @@ summary:focus-visible,
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 3px;
+  gap: 4px;
+}
+
+/* 얼마나 바뀌었나: 배지 아래 굵은 글자. 기준일 이상 지연만 빨간 바탕 */
+.delta {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.delta.is-early {
+  color: var(--gray);
+}
+
+.delta.is-alert {
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--red);
+  color: var(--white);
 }
 
 .po-table .empty {
@@ -1136,12 +1426,13 @@ summary:focus-visible,
 
 .reason + .remark-out {
   margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .reason + .remark-out::before {
   content: '엑셀 문구 ';
   color: var(--gray);
-  font-size: 12px;
 }
 
 .shown {
@@ -1190,12 +1481,6 @@ summary:focus-visible,
   white-space: nowrap;
 }
 
-/* 색 배경 위에서도 읽히도록 */
-.po-table .st-changed .tag:not(.is-alert):not(.is-reissue),
-.po-table .st-new .tag:not(.is-alert):not(.is-reissue) {
-  background: var(--white);
-}
-
 .tag.is-alert {
   background: var(--red-tint);
   color: var(--red);
@@ -1204,8 +1489,11 @@ summary:focus-visible,
 
 /* PO 끝의 점으로 구별한 잔여 재등록 표시. 누르면 전산 등록 PO와 뜻이 펼쳐진다 */
 .reissue {
-  margin-top: 3px;
   font-weight: 400;
+}
+
+.reissue[open] {
+  flex-basis: 100%;
 }
 
 .reissue > summary {
@@ -1307,8 +1595,8 @@ summary:focus-visible,
 
 .row {
   display: grid;
-  grid-template-columns: 64px minmax(0, 1.4fr) minmax(150px, 0.8fr) 250px;
-  gap: 8px 16px;
+  grid-template-columns: 64px minmax(0, 1fr) minmax(150px, 220px) 250px;
+  gap: 8px 24px;
   align-items: start;
   padding: 10px 0 10px 12px;
   border-top: 1px solid var(--line);
@@ -1369,7 +1657,7 @@ summary:focus-visible,
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  font-size: 14px;
+  font-size: 13px;
   cursor: pointer;
 }
 
@@ -1460,6 +1748,12 @@ summary:focus-visible,
     margin-top: 0;
     padding-bottom: 32px;
   }
+  .side-foot {
+    position: static;
+    margin: 4px 0 0;
+    padding: 0;
+    border-top: 0;
+  }
   .charts {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -1503,7 +1797,7 @@ summary:focus-visible,
 
 /*
   ---------- 표를 다 펼칠 폭이 안 될 때: 한 줄을 카드로 접는다 ----------
-  값과 순서는 표와 같다. SHIP TO만 숨긴다(지금 고른 고객사 하나뿐이라서).
+  값과 순서는 표와 같다. SHIP TO는 고객사 하나만 볼 때만 숨긴다(전체 보기에서는 PO 위에 적는다).
 */
 
 @media (max-width: 1100px) {
@@ -1551,7 +1845,12 @@ summary:focus-visible,
     box-shadow: inset 4px 0 0 var(--red);
   }
   .pending-table td,
-  .pending-table .c-remarks {
+  .pending-table .c-remarks,
+  .pending-table td.c-order,
+  .pending-table td.c-delivery,
+  .pending-table td.c-prev,
+  .pending-table td.c-exw,
+  .pending-table td.c-unit {
     position: static;
     width: auto;
     min-width: 0;
@@ -1561,8 +1860,18 @@ summary:focus-visible,
     box-shadow: none !important;
     text-align: left !important;
   }
-  .pending-table td.c-ship {
+  .pending-table {
+    table-layout: auto;
+  }
+  .pending-table.one-ship td.c-ship {
     display: none;
+  }
+  .pending-table td.c-ship {
+    order: 1;
+    grid-column: 1 / -1;
+    color: var(--gray);
+    font-size: 12px;
+    font-weight: 700;
   }
   .pending-table td.c-mark,
   .pending-table td.c-po,
@@ -1666,11 +1975,21 @@ summary:focus-visible,
 
 /* ---------- 이전·최신 나란히 비교 창 ---------- */
 
+/* 줄마다 되풀이되는 버튼이라 평소에는 회색으로 가라앉히고, 가리키거나 포커스가 오면 색을 준다 */
 .compare-btn {
-  display: block;
-  margin-top: 4px;
+  padding: 2px 0;
+  color: var(--gray);
   font-size: 12px;
+  font-weight: 400;
+  text-decoration-color: var(--field);
+  text-underline-offset: 2px;
   white-space: nowrap;
+}
+
+.compare-btn:hover,
+.compare-btn:focus-visible {
+  color: var(--blue-green-dark);
+  text-decoration-color: currentColor;
 }
 
 .compare {
@@ -1692,6 +2011,18 @@ summary:focus-visible,
   flex-direction: column;
   gap: 16px;
   padding: 20px 24px 8px;
+}
+
+.cmp-head {
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.cmp-head .marks {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
 }
 
 .cmp-head h3 {
@@ -1767,6 +2098,25 @@ summary:focus-visible,
   text-align: right;
 }
 
+.cmp-table th:first-child,
+.cmp-table td:first-child {
+  padding-left: 0;
+}
+
+/* 이전 값은 흐리게, 바뀐 최신 값은 굵게 */
+.cmp-dates td:nth-child(2) {
+  color: var(--gray);
+}
+
+.cmp-dates .ds-changed td:nth-child(3),
+.cmp-dates .ds-added td:nth-child(3) {
+  font-weight: 700;
+}
+
+.cmp-dates {
+  max-width: 560px;
+}
+
 .cmp-table tfoot th,
 .cmp-table tfoot td {
   border-top: 1px solid var(--light-gray);
@@ -1803,10 +2153,20 @@ summary:focus-visible,
   color: var(--gray);
 }
 
+/* 전산 등록 행은 열이 6개라 반쪽 폭에는 들어가지 않는다. 위아래로 쌓아 같은 열끼리 눈으로 맞춘다 */
 .cmp-sides {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
+}
+
+.cmp-side h4 {
+  display: inline;
+}
+
+.cmp-side .cmp-file {
+  display: inline;
+  margin-left: 6px;
 }
 
 .cmp-none {
@@ -1844,7 +2204,155 @@ summary:focus-visible,
 }
 
 @media (max-width: 720px) {
-  .cmp-sides {
-    grid-template-columns: 1fr;
+  #compare-body {
+    padding: 16px 16px 8px;
+  }
+  .compare-foot {
+    padding: 12px 16px 16px;
+  }
+}
+
+/* ---------- 안내 메일 초안 ---------- */
+
+.mail {
+  display: grid;
+  grid-template-columns: 248px minmax(0, 1fr);
+  gap: 16px 32px;
+  align-items: start;
+  margin-top: 4px;
+}
+
+.mail-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.mail-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mail-field input[type='text'] {
+  width: 100%;
+}
+
+.mail-days {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.mail-days input {
+  width: 76px;
+  font-variant-numeric: tabular-nums;
+}
+
+.mail-draft {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  max-width: 76ch;
+}
+
+.mail-summary {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+/* 메일처럼 읽히는 종이 한 장: 제목 줄과 본문 */
+.mail-sheet {
+  border: 1px solid var(--light-gray);
+  border-radius: var(--radius);
+  background: var(--white);
+}
+
+.mail-subject-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.mail-key {
+  flex: none;
+  color: var(--gray);
+  font-size: 12px;
+}
+
+.mail-subject {
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.mail-body {
+  margin: 0;
+  padding: 16px;
+  border-radius: 0 0 var(--radius) var(--radius);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.mail-body:focus-visible {
+  outline: 2px solid var(--blue-green);
+  outline-offset: 2px;
+}
+
+.mail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.ghost-strong {
+  border-color: var(--blue-green);
+  background: var(--blue-green);
+  color: var(--white);
+  font-weight: 700;
+}
+
+.ghost-strong:hover {
+  background: var(--blue-green-dark);
+}
+
+.mail-status {
+  color: var(--blue-green-dark);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.mail-status.is-error {
+  color: var(--red);
+}
+
+@media (max-width: 1100px) {
+  .mail {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .mail-form {
+    max-width: 420px;
+  }
+}
+
+@media (max-width: 700px) {
+  /* 탭이 넷이라 한 줄에 안 들어가면 옆으로 민다 */
+  .tabs {
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+  }
+  .tab {
+    margin-bottom: 0;
+  }
+  .tab:not(.tab-tool) + .tab-tool {
+    margin-left: 8px;
   }
 }

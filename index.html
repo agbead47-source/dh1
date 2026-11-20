@@ -11,7 +11,7 @@
       <aside class="side" aria-label="작업 순서">
         <header class="side-head">
           <h1>배송일정 변경 비교</h1>
-          <p>파일은 이 PC 밖으로 전송되지 않습니다.</p>
+          <p>파일은 PC 밖으로 나가지 않습니다.</p>
         </header>
 
         <section class="side-block step" data-step="upload" aria-labelledby="step-upload">
@@ -44,7 +44,7 @@
         <section class="side-block step" data-step="review" aria-labelledby="step-review">
           <h2 class="step-head" id="step-review">
             <span class="step-mark" aria-hidden="true">2</span>
-            <span class="step-name">변경 검토, 사유 입력</span>
+            <span class="step-name">검토, 사유 입력</span>
             <span class="step-status" data-role="status"></span>
           </h2>
           <label class="field-label" for="ship-to">고객사(납품처)</label>
@@ -83,7 +83,7 @@
           <!-- 사이드바가 길어 스크롤되어도 다운로드 버튼은 아래에 붙어 보인다 -->
           <div class="side-foot">
             <p id="export-warn" class="warn" role="status"></p>
-            <button type="button" id="download" class="primary" disabled>Delivery Schedule 엑셀 다운로드</button>
+            <button type="button" id="download" class="primary" disabled>Delivery Schedule 다운로드</button>
             <p id="export-file" class="side-hint export-file"></p>
           </div>
         </section>
@@ -135,7 +135,9 @@
           <div id="tabs" class="tabs" role="tablist" aria-label="엑셀 시트">
             <button type="button" role="tab" id="tab-pending" class="tab" data-tab="pending" aria-controls="pane-pending" aria-selected="true">Pending Order <b></b></button>
             <button type="button" role="tab" id="tab-shipped" class="tab" data-tab="shipped" aria-controls="pane-shipped" aria-selected="false" tabindex="-1">Shipped Orders <b></b></button>
-            <button type="button" role="tab" id="tab-gone" class="tab tab-check" data-tab="gone" aria-controls="pane-gone" aria-selected="false" tabindex="-1">최신 파일에 없는 주문 <b></b></button>
+            <!-- 아래 둘은 엑셀 시트가 아니라 도구 탭이다. 시트 탭과 띄워서 다른 모양으로 둔다 -->
+            <button type="button" role="tab" id="tab-gone" class="tab tab-tool tab-check" data-tab="gone" aria-controls="pane-gone" aria-selected="false" tabindex="-1">최신 파일에 없는 주문 <b></b></button>
+            <button type="button" role="tab" id="tab-mail" class="tab tab-tool" data-tab="mail" aria-controls="pane-mail" aria-selected="false" tabindex="-1">안내 메일</button>
           </div>
 
           <div id="pane-pending" role="tabpanel" aria-labelledby="tab-pending">
@@ -225,6 +227,48 @@
               <h4 id="gone-title"></h4>
               <ul id="gone-list" class="list"></ul>
             </section>
+          </div>
+
+          <!-- 고객 안내 메일 초안(영문). 보내지 않는다. 복사해서 사내 메일에 붙여 넣는다 -->
+          <div id="pane-mail" role="tabpanel" aria-labelledby="tab-mail" hidden>
+            <div class="legend">
+              <span class="legend-note">이 도구는 메일을 보내지 않습니다. 복사해서 사내 메일에 붙여 넣고 일정표 파일을 첨부하세요.</span>
+            </div>
+            <div class="mail">
+              <div class="mail-form">
+                <label class="mail-field" for="mail-recipient">
+                  <span class="field-label">받는 사람 호칭</span>
+                  <input type="text" id="mail-recipient" autocomplete="off" placeholder="예: Mr. Kim" />
+                  <span class="side-hint">본문 첫 줄 Dear 뒤에 그대로 들어갑니다. 비우면 Customer.</span>
+                </label>
+                <label class="mail-field" for="mail-sender">
+                  <span class="field-label">보내는 사람 이름</span>
+                  <input type="text" id="mail-sender" autocomplete="off" placeholder="예: Gildong Hong" />
+                  <span class="side-hint">본문 끝 Best regards 아래에 그대로 들어갑니다.</span>
+                </label>
+                <label class="mail-field" for="mail-days">
+                  <span class="field-label">지연 기준일</span>
+                  <span class="mail-days"><input type="number" id="mail-days" min="1" step="1" value="10" inputmode="numeric" /> 일 이상</span>
+                  <span class="side-hint">이만큼 늦어진 주문을 본문에 한 건씩 적습니다.</span>
+                </label>
+              </div>
+              <div class="mail-draft">
+                <p id="mail-summary" class="mail-summary"></p>
+                <p id="mail-warn" class="warn"></p>
+                <div class="mail-actions">
+                  <button type="button" id="copy-subject" class="ghost">제목 복사</button>
+                  <button type="button" id="copy-body" class="ghost ghost-strong">본문 복사</button>
+                  <span id="mail-status" class="mail-status" role="status"></span>
+                </div>
+                <div class="mail-sheet">
+                  <div class="mail-subject-row">
+                    <span class="mail-key">제목</span>
+                    <p id="mail-subject" class="mail-subject"></p>
+                  </div>
+                  <pre id="mail-body" class="mail-body" tabindex="0" aria-label="메일 본문 초안. 읽기 전용"></pre>
+                </div>
+              </div>
+            </div>
           </div>
         </section>
       </main>

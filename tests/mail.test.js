@@ -13,7 +13,37 @@ const reasons = new Map([
   [keyOf('PO-1009'), { code: 'cancelled', text: '' }],
 ]);
 const date = new Date(2026, 10, 20);
-const draft = (over = {}) => buildMailDraft({ changes, reasons, shipTo: null, label: 'DHE', date, ...over });
+const simple = (over = {}) => buildMailDraft({ changes, reasons, shipTo: null, label: 'DHE', date, ...over });
+// 아래 buildMailDraft 묶음은 상세 내용을 넣는 선택 사항(detail: true)을 본다
+const draft = (over = {}) => simple({ detail: true, ...over });
+
+describe('buildMailDraft 기본(간단한 안내)', () => {
+  it('일정표를 첨부했다는 짧은 안내만 적고, 변경 요약과 주문 목록은 넣지 않는다', () => {
+    const d = simple({ sender: 'Sales Admin Team' });
+    expect(d.subject).toBe('Updated Delivery Schedule - DHE (2026.11.20)');
+    expect(d.body).toBe(
+      [
+        'Dear Customer,',
+        'Please find attached the updated delivery schedule as of November 20, 2026.',
+        'Changed EXW dates are marked in red in the Pending Order sheet.',
+        'Please let us know if you have any questions.',
+        'Best regards,\nSales Admin Team',
+      ].join('\n\n') + '\n',
+    );
+    expect(d.body).not.toContain('PO-');
+  });
+
+  it('변경이 없으면 변경 없음으로 적는다', () => {
+    const same = diffOrders(prepare(currRaw).orders, prepare(currRaw).orders);
+    const d = buildMailDraft({ changes: same, reasons: new Map(), shipTo: null, label: 'DHE', date });
+    expect(d.body).toContain('There are no changes since the previous schedule.');
+    expect(d.body).not.toContain('marked in red');
+  });
+
+  it('요약 숫자는 화면에서 쓸 수 있게 계속 돌려준다', () => {
+    expect(simple().summary).toEqual({ schedule: 5, quantity: 1, added: 2, cancelled: 1, shipped: 0, delayed: 3 });
+  });
+});
 
 describe('buildMailDraft', () => {
   it('제목에 고객 이름과 날짜가 들어간다', () => {
@@ -78,7 +108,7 @@ describe('buildMailDraft', () => {
 
   it('변경이 하나도 없으면 변경 없음으로 적는다', () => {
     const same = diffOrders(prepare(currRaw).orders, prepare(currRaw).orders);
-    const d = buildMailDraft({ changes: same, reasons: new Map(), shipTo: null, label: 'DHE', date });
+    const d = buildMailDraft({ changes: same, reasons: new Map(), shipTo: null, label: 'DHE', date, detail: true });
     expect(d.body).toContain('There are no changes since the previous schedule.');
     expect(d.body).not.toContain('Summary of changes');
   });

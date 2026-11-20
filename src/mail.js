@@ -11,7 +11,8 @@ const orders = (n) => `${n} order${n === 1 ? '' : 's'}`;
 const last = (lines) => (lines.length ? lines[lines.length - 1].date : '');
 
 /**
- * 변경 내용으로 안내 메일 초안을 만든다.
+ * 안내 메일 초안을 만든다. 기본은 "업데이트한 일정표를 첨부했다"는 짧은 안내이고,
+ * detail을 켜면 변경 요약과 많이 늦어진 주문 목록을 본문에 더한다.
  * @param {object} args
  * @param {object[]} args.changes diffOrders 결과
  * @param {Map<string, {code:string, text:string}>} args.reasons 변경 키 → 사유
@@ -19,6 +20,7 @@ const last = (lines) => (lines.length ? lines[lines.length - 1].date : '');
  * @param {string} args.label 제목에 넣을 고객 이름(파일명에 쓰는 이름과 같다)
  * @param {Date} [args.date] 기준일(메일을 쓰는 날)
  * @param {number} [args.delayDays] 이 일수 이상 늦어진 주문을 본문에 따로 적는다
+ * @param {boolean} [args.detail] 변경 요약과 지연 주문 목록을 본문에 넣을지. 기본은 넣지 않는다
  * @param {string} [args.recipient] 받는 사람 호칭. 비우면 Customer
  * @param {string} [args.sender] 보내는 사람 이름. 비우면 서명 없이 끝낸다
  * @returns {{subject: string, body: string, summary: object, delayed: object[]}}
@@ -30,6 +32,7 @@ export function buildMailDraft({
   label = '',
   date = new Date(),
   delayDays = DEFAULT_DELAY_DAYS,
+  detail = false,
   recipient = '',
   sender = '',
 }) {
@@ -74,13 +77,13 @@ export function buildMailDraft({
     summary.cancelled && `- Cancelled: ${orders(summary.cancelled)}`,
   ].filter(Boolean);
 
-  if (lines.length) {
-    parts.push(['Summary of changes since the previous schedule:', ...lines].join('\n'));
-  } else {
+  if (!lines.length) {
     parts.push('There are no changes since the previous schedule.');
+  } else if (detail) {
+    parts.push(['Summary of changes since the previous schedule:', ...lines].join('\n'));
   }
 
-  if (delayed.length) {
+  if (detail && delayed.length) {
     parts.push(
       [
         `The following orders are delayed by ${delayDays} days or more:`,
@@ -95,6 +98,7 @@ export function buildMailDraft({
   }
 
   if (lines.length) parts.push('Changed EXW dates are marked in red in the Pending Order sheet.');
+  if (!detail) parts.push('Please let us know if you have any questions.');
   parts.push(['Best regards,', sender.trim()].filter(Boolean).join('\n'));
 
   return { subject, body: `${parts.join('\n\n')}\n`, summary, delayed };

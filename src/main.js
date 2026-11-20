@@ -4,6 +4,7 @@ import { prepare, normalizeShipped } from './normalize.js';
 import { diffOrders, compareChange } from './diff.js';
 import { defaultReason, isFilled, needsReason } from './reasons.js';
 import { buildExportRows, buildShippedRows, buildWorkbook, exportFileName, fileLabelFor } from './export.js';
+import { buildMailDraft, DEFAULT_DELAY_DAYS } from './mail.js';
 import * as ui from './ui/render.js';
 
 const $ = (sel) => document.querySelector(sel);
@@ -36,7 +37,19 @@ const el = {
   cancelled: $('#po-cancelled'),
   shown: $('#shown'),
   tabs: $('#tabs'),
-  panes: { pending: $('#pane-pending'), shipped: $('#pane-shipped'), gone: $('#pane-gone') },
+  panes: { pending: $('#pane-pending'), shipped: $('#pane-shipped'), gone: $('#pane-gone'), mail: $('#pane-mail') },
+  mail: {
+    recipient: $('#mail-recipient'),
+    sender: $('#mail-sender'),
+    days: $('#mail-days'),
+    subject: $('#mail-subject'),
+    body: $('#mail-body'),
+    summary: $('#mail-summary'),
+    warn: $('#mail-warn'),
+    status: $('#mail-status'),
+    copySubject: $('#copy-subject'),
+    copyBody: $('#copy-body'),
+  },
   goneEmpty: $('#gone-empty'),
   compare: $('#compare'),
   compareBody: $('#compare-body'),
@@ -65,7 +78,7 @@ const state = {
   idByKey: new Map(), // 변경 키 → changes 순번
   reasons: new Map(), // 변경 키 → { code, text }
   shipTo: ALL,
-  tab: 'pending', // 보고 있는 시트: 'pending' | 'shipped'
+  tab: 'pending', // 보고 있는 탭: 'pending' | 'shipped' | 'gone' | 'mail'
   view: 'changed', // 'all' 엑셀에 나가는 전체 줄 | 'changed' 변경된 주문만 | 'missing' 사유 미입력만
   filter: 'all', // 유형 필터. 보기와 함께 걸린다
   downloaded: new Set(), // 지금 내용 그대로 엑셀을 내려받은 납품처
@@ -84,7 +97,8 @@ const scopeName = () => (state.shipTo === ALL ? '전체 고객사' : state.shipT
 /** 파일명에 넣을 이름. 직접 적은 값이 있으면 그것, 없으면 납품처나 매출처에서 만든다. */
 const autoLabel = () =>
   fileLabelFor({ shipTo: scope(), soldTo: state.files.curr?.stats.soldTo || state.files.prev?.stats.soldTo });
-const fileName = () => exportFileName(el.optLabel.value.trim() || autoLabel());
+const label = () => el.optLabel.value.trim() || autoLabel();
+const fileName = () => exportFileName(label());
 const isMissing = (c) => needsReason(c.type) && !isFilled(state.reasons.get(c.key));
 
 /** 화면의 표와 내려받는 엑셀이 같은 행을 쓴다. */
@@ -240,6 +254,7 @@ function renderCounts(rows = exportRows()) {
     state.tab,
   );
   ui.renderGoneTitle(el.goneTitle, gone.length, goneMissing);
+  renderMail();
 }
 
 /** 표에 그릴 항목. 사유 입력은 주문마다 한 줄에만 둔다: 변경된 첫 줄, 없으면 첫 줄. */
@@ -525,6 +540,92 @@ for (const box of [el.rows, el.cancelled, el.goneList]) {
 el.compare.addEventListener('click', (e) => {
   if (e.target === el.compare) el.compare.close();
 });
+
+// ---------- 안내 메일 초안 ----------
+
+const MAIL_PREFS_KEY = 'dh-delivery-mail-prefs';
+
+/** 지연 기준일. 비었거나 1보다 작으면 기본값을 쓴다. */
+function mailDelayDays() {
+  const n = Math.floor(Number(el.mail.days.value));
+  return Number.isFinite(n) && n >= 1 ? n : DEFAULT_DELAY_DAYS;
+}
+
+/** 메일 탭을 볼 때만 그린다. 사유, 고객사, 사라진 주문 선택, 파일명 이름이 바뀌면 renderCounts를 거쳐 여기로 온다. */
+function renderMail() {
+  if (state.tab !== 'mail' || !isReady()) return;
+  const delayDays = mailDelayDays();
+  const draft = buildMailDraft({
+    changes: state.changes,
+    reasons: state.reasons,
+    shipTo: scope(),
+    label: label(),
+    delayDays,
+    recipient: el.mail.recipient.value,
+    sender: el.mail.sender.value,
+  });
+  ui.renderMail(el.mail, draft, {
+    delayDays,
+    noReason: draft.delayed.filter((d) => !d.reason).length,
+    goneMissing: forShipTo().filter((c) => c.type === 'gone' && isMissing(c)).length,
+  });
+}
+
+// 호칭, 이름, 기준일만 이 PC에 남긴다(주문 데이터는 저장하지 않는다). 저장이 막혀 있어도 그대로 동작한다
+try {
+  const saved = JSON.parse(localStorage.getItem(MAIL_PREFS_KEY) ?? '{}');
+  if (typeof saved.recipient === 'string') el.mail.recipient.value = saved.recipient;
+  if (typeof saved.sender === 'string') el.mail.sender.value = saved.sender;
+  if (Number(saved.delayDays) >= 1) el.mail.days.value = String(Math.floor(Number(saved.delayDays)));
+} catch {
+  // 저장된 값을 못 읽으면 기본값으로 시작한다
+}
+
+for (const input of [el.mail.recipient, el.mail.sender, el.mail.days]) {
+  input.addEventListener('input', () => {
+    try {
+      localStorage.setItem(
+        MAIL_PREFS_KEY,
+        JSON.stringify({ recipient: el.mail.recipient.value, sender: el.mail.sender.value, delayDays: mailDelayDays() }),
+      );
+    } catch {
+      // 저장하지 못해도 초안은 만든다
+    }
+    renderMail();
+  });
+}
+
+// 기준일 칸을 비우거나 0을 넣고 나가면 실제로 쓰인 값으로 되돌려 보여 준다
+el.mail.days.addEventListener('change', () => {
+  el.mail.days.value = String(mailDelayDays());
+});
+
+let mailStatusTimer;
+function showMailStatus(text, failed = false) {
+  clearTimeout(mailStatusTimer);
+  el.mail.status.textContent = text;
+  el.mail.status.classList.toggle('is-error', failed);
+  mailStatusTimer = setTimeout(() => (el.mail.status.textContent = ''), failed ? 8000 : 2500);
+}
+
+/** 클립보드에 넣는다. 막혀 있으면 그 부분을 선택해 두고 Ctrl+C를 안내한다. */
+async function copyFrom(node, what) {
+  try {
+    await navigator.clipboard.writeText(node.textContent);
+    showMailStatus(`${what}을 복사했습니다`);
+  } catch (err) {
+    console.error(err);
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+    showMailStatus(`복사하지 못했습니다. ${what}을 선택해 두었으니 Ctrl+C로 복사하세요.`, true);
+  }
+}
+
+el.mail.copySubject.addEventListener('click', () => copyFrom(el.mail.subject, '제목'));
+el.mail.copyBody.addEventListener('click', () => copyFrom(el.mail.body, '본문'));
 
 // ---------- 다운로드 ----------
 

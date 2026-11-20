@@ -92,7 +92,7 @@ export function renderSideProgress(el, data) {
 }
 
 export function renderExportWarn(el, missing) {
-  el.textContent = missing ? `사유 미입력 ${num(missing)}건. 그대로 내려받을 수도 있습니다.` : '';
+  el.textContent = missing ? `사유 미입력 ${num(missing)}건. 그대로 받을 수도 있습니다.` : '';
 }
 
 // ---------- 본문 머리, 빈 상태 ----------
@@ -393,7 +393,8 @@ export function renderTabs(el, counts, active) {
     tab.tabIndex = on ? 0 : -1;
     const name = tab.dataset.tab;
     // 확인용 탭은 줄이 아니라 주문 건수를 세고, 아직 고르지 않은 건이 있으면 빨갛게 알린다
-    tab.querySelector('b').textContent = name === 'gone' ? `${num(counts.gone)}건` : `${num(counts[name])}줄`;
+    const count = tab.querySelector('b'); // 안내 메일 탭에는 건수가 없다
+    if (count) count.textContent = name === 'gone' ? `${num(counts.gone)}건` : `${num(counts[name])}줄`;
     if (name === 'gone') tab.classList.toggle('is-alert', counts.goneMissing > 0);
   }
 }
@@ -477,6 +478,25 @@ export function renderGone(el, items, showShip = false) {
       </li>`;
     })
     .join('');
+}
+
+// ---------- 안내 메일 초안 ----------
+
+/**
+ * els: { subject, body, summary, warn }. draft는 buildMailDraft 결과.
+ * 제목과 본문은 사용자 입력(호칭, 이름)이 섞인 일반 텍스트라 textContent로만 넣는다.
+ * info: { delayDays, noReason(본문에 적힌 지연 주문 중 사유 미입력), goneMissing(출하/취소를 고르지 않은 주문) }
+ */
+export function renderMail(els, draft, { delayDays, noReason, goneMissing }) {
+  els.subject.textContent = draft.subject;
+  els.body.textContent = draft.body;
+  els.summary.textContent = draft.delayed.length
+    ? `지연 기준 ${num(delayDays)}일 이상 ${num(draft.delayed.length)}건을 본문에 한 건씩 적었습니다.`
+    : `${num(delayDays)}일 이상 늦어진 주문이 없어 지연 안내 문단은 넣지 않았습니다.`;
+  const warns = [];
+  if (noReason) warns.push(`사유 미입력 ${num(noReason)}건은 사유 없이 적힙니다.`);
+  if (goneMissing) warns.push(`출하 완료/주문 취소를 고르지 않은 ${num(goneMissing)}건은 요약에 들어가지 않습니다.`);
+  els.warn.textContent = warns.join(' ');
 }
 
 // ---------- 이전·최신 나란히 비교 창 ----------
