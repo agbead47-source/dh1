@@ -485,11 +485,17 @@ export function renderGone(el, items, showShip = false) {
 /**
  * els: { subject, body, summary, warn }. draft는 buildMailDraft 결과.
  * 제목과 본문은 사용자 입력(호칭, 이름)이 섞인 일반 텍스트라 textContent로만 넣는다.
- * info: { delayDays, noReason(본문에 적힌 지연 주문 중 사유 미입력), goneMissing(출하/취소를 고르지 않은 주문) }
+ * info: { detail(상세 내용 넣기), delayDays, noReason(본문에 적힌 지연 주문 중 사유 미입력), goneMissing(출하/취소를 고르지 않은 주문) }
  */
-export function renderMail(els, draft, { delayDays, noReason, goneMissing }) {
+export function renderMail(els, draft, { detail, delayDays, noReason, goneMissing }) {
   els.subject.textContent = draft.subject;
   els.body.textContent = draft.body;
+  if (!detail) {
+    // 기본은 짧은 안내다. 주문 번호나 건수가 본문에 없으니 요약과 경고도 필요 없다
+    els.summary.textContent = '짧은 안내만 적습니다. 변경 내용은 첨부한 일정표에 있습니다.';
+    els.warn.textContent = '';
+    return;
+  }
   els.summary.textContent = draft.delayed.length
     ? `지연 기준 ${num(delayDays)}일 이상 ${num(draft.delayed.length)}건을 본문에 한 건씩 적었습니다.`
     : `${num(delayDays)}일 이상 늦어진 주문이 없어 지연 안내 문단은 넣지 않았습니다.`;

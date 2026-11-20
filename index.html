@@ -246,7 +246,11 @@
                   <input type="text" id="mail-sender" autocomplete="off" placeholder="예: Gildong Hong" />
                   <span class="side-hint">본문 끝 Best regards 아래에 그대로 들어갑니다.</span>
                 </label>
-                <label class="mail-field" for="mail-days">
+                <label class="check">
+                  <input type="checkbox" id="mail-detail" />
+                  <span>상세 내용 넣기 <span class="side-hint">(변경 요약, 많이 늦어진 주문 목록)</span></span>
+                </label>
+                <label class="mail-field" id="mail-days-field" for="mail-days" hidden>
                   <span class="field-label">지연 기준일</span>
                   <span class="mail-days"><input type="number" id="mail-days" min="1" step="1" value="10" inputmode="numeric" /> 일 이상</span>
                   <span class="side-hint">이만큼 늦어진 주문을 본문에 한 건씩 적습니다.</span>

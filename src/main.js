@@ -41,6 +41,8 @@ const el = {
   mail: {
     recipient: $('#mail-recipient'),
     sender: $('#mail-sender'),
+    detail: $('#mail-detail'),
+    daysField: $('#mail-days-field'),
     days: $('#mail-days'),
     subject: $('#mail-subject'),
     body: $('#mail-body'),
@@ -555,38 +557,48 @@ function mailDelayDays() {
 function renderMail() {
   if (state.tab !== 'mail' || !isReady()) return;
   const delayDays = mailDelayDays();
+  const detail = el.mail.detail.checked;
+  el.mail.daysField.hidden = !detail; // 기준일은 상세 내용을 넣을 때만 본문에 쓰인다
   const draft = buildMailDraft({
     changes: state.changes,
     reasons: state.reasons,
     shipTo: scope(),
     label: label(),
     delayDays,
+    detail,
     recipient: el.mail.recipient.value,
     sender: el.mail.sender.value,
   });
   ui.renderMail(el.mail, draft, {
+    detail,
     delayDays,
     noReason: draft.delayed.filter((d) => !d.reason).length,
     goneMissing: forShipTo().filter((c) => c.type === 'gone' && isMissing(c)).length,
   });
 }
 
-// 호칭, 이름, 기준일만 이 PC에 남긴다(주문 데이터는 저장하지 않는다). 저장이 막혀 있어도 그대로 동작한다
+// 호칭, 이름, 기준일, 상세 내용 여부만 이 PC에 남긴다(주문 데이터는 저장하지 않는다). 저장이 막혀 있어도 그대로 동작한다
 try {
   const saved = JSON.parse(localStorage.getItem(MAIL_PREFS_KEY) ?? '{}');
   if (typeof saved.recipient === 'string') el.mail.recipient.value = saved.recipient;
   if (typeof saved.sender === 'string') el.mail.sender.value = saved.sender;
   if (Number(saved.delayDays) >= 1) el.mail.days.value = String(Math.floor(Number(saved.delayDays)));
+  el.mail.detail.checked = saved.detail === true;
 } catch {
   // 저장된 값을 못 읽으면 기본값으로 시작한다
 }
 
-for (const input of [el.mail.recipient, el.mail.sender, el.mail.days]) {
+for (const input of [el.mail.recipient, el.mail.sender, el.mail.days, el.mail.detail]) {
   input.addEventListener('input', () => {
     try {
       localStorage.setItem(
         MAIL_PREFS_KEY,
-        JSON.stringify({ recipient: el.mail.recipient.value, sender: el.mail.sender.value, delayDays: mailDelayDays() }),
+        JSON.stringify({
+          recipient: el.mail.recipient.value,
+          sender: el.mail.sender.value,
+          delayDays: mailDelayDays(),
+          detail: el.mail.detail.checked,
+        }),
       );
     } catch {
       // 저장하지 못해도 초안은 만든다
