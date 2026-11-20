@@ -39,7 +39,8 @@ export function reissueStatus(prev, curr) {
   const dotted = ref.dottedRows > 0;
   return {
     dotted,
-    newlyDotted: Boolean(prev && curr && curr.dottedRows > 0 && prev.dottedRows === 0),
+    // 보냈던 일정표에는 점이 없으므로, 이전 파일이 일정표면 '이번에 생겼다'고 단정하지 않는다
+    newlyDotted: Boolean(prev && curr && curr.dottedRows > 0 && prev.dottedRows === 0 && !prev.fromSchedule),
     mixed: dotted && ref.plainRows > 0,
   };
 }

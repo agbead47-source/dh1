@@ -87,6 +87,10 @@ export function normalizeRows(rawRows) {
       itemCode: text(raw['품목코드']),
       maker: text(raw['제조사']),
       orderNo: text(raw['수주번호']),
+      // 아래 셋은 보냈던 일정표(Pending Order)를 올렸을 때만 값이 있다
+      deliveryDate: toDateStr(raw['희망납기']),
+      prevRemarks: text(raw['이전REMARKS']),
+      fromSchedule: raw['출처'] === 'schedule',
     });
   }
   return { rows, stats };
@@ -111,6 +115,9 @@ export function aggregate(rows) {
         unit: '',
         orderDate: '',
         erpPos: [], // 전산에 등록된 PO 표기(점 포함) 목록
+        deliveryDate: '', // 고객 희망 납기(일정표에서만 온다)
+        remarksByDate: {}, // 출하일 → 지난 일정표의 REMARKS
+        fromSchedule: false,
         dottedRows: 0,
         plainRows: 0,
         byDate: new Map(),
@@ -118,6 +125,9 @@ export function aggregate(rows) {
       orders.set(r.key, o);
     }
     if (!o.erpPos.includes(r.erpPo)) o.erpPos.push(r.erpPo);
+    if (!o.deliveryDate) o.deliveryDate = r.deliveryDate;
+    if (r.prevRemarks && !o.remarksByDate[r.date]) o.remarksByDate[r.date] = r.prevRemarks;
+    if (r.fromSchedule) o.fromSchedule = true;
     if (r.dotted) o.dottedRows++;
     else o.plainRows++;
     if (!o.partName) o.partName = r.partName;

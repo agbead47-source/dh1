@@ -38,7 +38,7 @@ function joinRemarks(...parts) {
 
 /**
  * 선택한 납품처의 출력 행을 만든다(엑셀과 무관한 순수 데이터).
- * status: 'same' | 'changed' | 'new' | 'cancelled'
+ * status: 'same' | 'changed' | 'new' | 'cancelled'. key와 type은 화면에서 줄과 변경 건을 잇는 데 쓴다(엑셀에는 나가지 않는다).
  * @param {{shipTo: string, changes: object[], reasons: Map<string, {code:string, text:string}>}} args
  */
 export function buildExportRows({ shipTo, changes, reasons }) {
@@ -53,10 +53,12 @@ export function buildExportRows({ shipTo, changes, reasons }) {
       if (sel?.code !== 'cancelled') continue; // 출하 완료 또는 미선택은 출력하지 않는다
       for (const line of c.prev.lines) {
         cancelled.push({
+          key: c.key,
+          type: c.type,
           status: 'cancelled',
           exwChanged: false,
           orderDate: c.prev.orderDate,
-          deliveryDate: '',
+          deliveryDate: c.prev.deliveryDate || '',
           prevExw: line.date,
           exw: '',
           shipTo: c.shipTo,
@@ -83,10 +85,13 @@ export function buildExportRows({ shipTo, changes, reasons }) {
       const lineChanged =
         !isNew && !isSame && !prevLines.some((p) => p.date === line.date && p.qty === line.qty);
       rows.push({
+        key: c.key,
+        type: c.type,
         status: isNew ? 'new' : lineChanged ? 'changed' : 'same',
         exwChanged: lineChanged && prevDates[i] !== line.date,
         orderDate: c.curr.orderDate,
-        deliveryDate: '',
+        // 고객 희망 납기는 전산자료에 없어 지난 일정표에서 넘겨받는다
+        deliveryDate: c.curr.deliveryDate || c.prev?.deliveryDate || '',
         prevExw: isNew ? '' : prevDates[i],
         exw: line.date,
         shipTo: c.shipTo,
@@ -95,7 +100,8 @@ export function buildExportRows({ shipTo, changes, reasons }) {
         partName: c.partName,
         qty: line.qty,
         unit: c.curr.unit,
-        remarks: lineChanged ? joinRemarks(remarkFor(sel), qtyNote) : '',
+        // 변경된 줄은 이번 사유, 변경 없는 줄은 지난 일정표의 REMARKS를 그대로 둔다
+        remarks: lineChanged ? joinRemarks(remarkFor(sel), qtyNote) : isSame ? (c.prev.remarksByDate?.[line.date] ?? '') : '',
       });
     });
   }

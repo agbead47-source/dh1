@@ -8,45 +8,64 @@
   </head>
   <body>
     <div class="layout">
-      <aside class="side" aria-label="파일과 출력 설정">
+      <aside class="side" aria-label="작업 순서">
         <header class="side-head">
           <h1>배송일정 변경 비교</h1>
-          <p>전산 출하계획 2개를 비교해 고객용 Delivery Schedule을 만듭니다. 파일은 이 PC 밖으로 전송되지 않습니다.</p>
+          <p>이전과 최신 출하계획을 비교해 고객용 Delivery Schedule을 만듭니다. 파일은 이 PC 밖으로 전송되지 않습니다.</p>
         </header>
 
-        <section class="side-block" aria-label="전산자료 업로드">
-          <h2 class="side-title">전산자료</h2>
+        <section class="side-block step" data-step="upload" aria-labelledby="step-upload">
+          <h2 class="step-head" id="step-upload">
+            <span class="step-mark" aria-hidden="true">1</span>
+            <span class="step-name">전산자료 올리기</span>
+            <span class="step-status" data-role="status"></span>
+          </h2>
           <div class="upload">
             <label class="drop" data-slot="prev">
               <input type="file" accept=".xlsx" class="visually-hidden" />
-              <span class="drop-step">1. 이전 파일</span>
-              <span class="drop-body" data-role="body">이전 전산자료 엑셀을 끌어다 놓거나 눌러서 선택</span>
+              <span class="drop-step">이전 파일</span>
+              <span class="drop-body" data-role="body" data-prompt="이전 전산자료 또는 지난번에 보냈던 Delivery Schedule 엑셀을 끌어다 놓거나 눌러서 선택" aria-live="polite"></span>
             </label>
-            <button type="button" id="swap" class="swap" title="이전과 최신을 서로 바꾸기" aria-label="이전과 최신을 서로 바꾸기" disabled>⇅</button>
+            <button type="button" id="swap" class="swap" disabled>
+              <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
+                <path d="M5 2v11M5 2 2.5 4.5M5 2l2.5 2.5M11 14V3m0 11-2.5-2.5M11 14l2.5-2.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+              <span>이전·최신 서로 바꾸기</span>
+            </button>
             <label class="drop" data-slot="curr">
               <input type="file" accept=".xlsx" class="visually-hidden" />
-              <span class="drop-step">2. 최신 파일</span>
-              <span class="drop-body" data-role="body">최신 전산자료 엑셀을 끌어다 놓거나 눌러서 선택</span>
+              <span class="drop-step">최신 파일</span>
+              <span class="drop-body" data-role="body" data-prompt="최신 전산자료 엑셀을 끌어다 놓거나 눌러서 선택" aria-live="polite"></span>
             </label>
           </div>
-          <div id="summary-line" class="summary-line"></div>
           <button type="button" id="sample" class="link-btn">가짜 샘플 데이터로 보기</button>
         </section>
 
-        <section class="side-block">
-          <label class="side-title" for="ship-to">고객사(납품처)</label>
+        <section class="side-block step" data-step="review" aria-labelledby="step-review">
+          <h2 class="step-head" id="step-review">
+            <span class="step-mark" aria-hidden="true">2</span>
+            <span class="step-name">변경 검토, 사유 입력</span>
+            <span class="step-status" data-role="status"></span>
+          </h2>
+          <label class="field-label" for="ship-to">고객사(납품처)</label>
           <select id="ship-to" disabled></select>
-          <p class="side-hint">카드, 유형·지연 차트, 변경 목록, 엑셀이 이 고객사 기준으로 바뀝니다.</p>
+          <div id="side-progress" class="side-progress"></div>
+          <p class="side-hint">카드, 차트, 변경 목록, 엑셀이 이 고객사 기준으로 바뀝니다.</p>
         </section>
 
-        <section class="side-block side-export" aria-label="엑셀 출력">
-          <h2 class="side-title">엑셀 출력</h2>
+        <section class="side-block step side-export" data-step="export" aria-labelledby="step-export">
+          <h2 class="step-head" id="step-export">
+            <span class="step-mark" aria-hidden="true">3</span>
+            <span class="step-name">엑셀 내려받기</span>
+            <span class="step-status" data-role="status"></span>
+          </h2>
           <label class="check">
             <input type="checkbox" id="opt-delivery" checked />
-            <span>DELIVERY DATE 열 포함 (값은 비워 둠)</span>
+            <span>DELIVERY DATE 열 포함</span>
           </label>
           <p id="export-warn" class="warn" role="status"></p>
           <button type="button" id="download" class="primary" disabled>Delivery Schedule 엑셀 다운로드</button>
+          <p id="export-file" class="side-hint export-file"></p>
         </section>
       </aside>
 
@@ -60,40 +79,74 @@
 
         <div id="cards" class="cards"></div>
 
-        <section class="charts" aria-label="차트">
-          <article class="panel">
-            <header class="panel-head">
-              <h3>변경 유형별 건수</h3>
-              <span class="scope" data-scope="selected"></span>
-            </header>
-            <div id="chart-type" class="chart" role="group" aria-label="변경 유형별 건수. 누르면 목록을 그 유형으로 거릅니다"></div>
-          </article>
-          <article class="panel">
-            <header class="panel-head">
-              <h3>지연이 큰 주문</h3>
-              <span class="scope" data-scope="selected"></span>
-            </header>
-            <div id="chart-delay" class="chart"></div>
-          </article>
-          <article class="panel">
-            <header class="panel-head">
-              <h3>고객사별 변경 건수</h3>
-              <span class="scope is-all">전체 고객사 기준</span>
-            </header>
-            <div id="chart-ship" class="chart chart-scroll" role="group" aria-label="고객사별 변경 건수. 누르면 그 고객사로 바꿉니다"></div>
-          </article>
-        </section>
+        <details id="charts-fold" class="charts-fold">
+          <summary>차트로 보기 <span class="fold-note">변경 유형별 건수, 지연이 큰 주문, 고객사별 변경 건수</span></summary>
+          <section class="charts" aria-label="차트">
+            <article class="panel">
+              <header class="panel-head">
+                <h3>변경 유형별 건수</h3>
+                <span class="scope" data-scope="selected"></span>
+              </header>
+              <div id="chart-type" class="chart" role="group" aria-label="변경 유형별 건수. 누르면 표를 그 유형으로 거릅니다"></div>
+            </article>
+            <article class="panel">
+              <header class="panel-head">
+                <h3>지연이 큰 주문</h3>
+                <span class="scope" data-scope="selected"></span>
+              </header>
+              <div id="chart-delay" class="chart"></div>
+            </article>
+            <article class="panel">
+              <header class="panel-head">
+                <h3>고객사별 변경 건수</h3>
+                <span class="scope is-all">전체 고객사 기준</span>
+              </header>
+              <div id="chart-ship" class="chart chart-scroll" role="group" aria-label="고객사별 변경 건수. 누르면 그 고객사로 바꿉니다"></div>
+            </article>
+          </section>
+        </details>
 
-        <section id="review" class="panel list-panel" aria-label="변경 목록">
+        <section id="review" class="panel list-panel" aria-labelledby="review-title">
           <header class="panel-head">
-            <h3>변경 목록</h3>
+            <h3 id="review-title">Pending Order 미리보기</h3>
             <span class="scope" data-scope="selected"></span>
           </header>
-          <div id="chips" class="chips" role="group" aria-label="변경 유형 필터"></div>
-          <div class="list-head" aria-hidden="true">
-            <span>유형</span><span>주문</span><span>이전 → 최신</span><span>사유</span>
+          <p class="panel-lead">내려받을 엑셀과 같은 열, 같은 순서입니다. 바뀐 줄의 REMARKS 칸에서 사유를 고르면 엑셀에 들어갈 영문 문구가 바로 보입니다.</p>
+          <!-- 표가 길어도 보기 전환과 진행 표시가 보이도록 위에 붙여 둔다 -->
+          <div class="list-tools">
+            <div id="views" class="chips" role="group" aria-label="보기"></div>
+            <div id="chips" class="chips type-chips" role="group" aria-label="변경 유형 필터"></div>
+            <div id="reason-tools" class="reason-tools"></div>
           </div>
-          <ul id="list" class="list"></ul>
+          <div class="table-wrap" tabindex="0" role="region" aria-label="Pending Order 표. 좁으면 가로로 스크롤됩니다">
+            <table id="po-table" class="po-table">
+              <thead>
+                <tr>
+                  <th scope="col" class="c-mark">변경 <span class="th-note">화면에만</span></th>
+                  <th scope="col" class="c-order">ORDER DATE</th>
+                  <th scope="col" class="c-delivery">DELIVERY DATE</th>
+                  <th scope="col" class="c-prev">Previous EXW</th>
+                  <th scope="col" class="c-exw">Updated EXW</th>
+                  <th scope="col" class="c-ship">SHIP TO</th>
+                  <th scope="col" class="c-po">PO NO.</th>
+                  <th scope="col" class="c-partno">PART NO.</th>
+                  <th scope="col" class="c-name">PART NAME</th>
+                  <th scope="col" class="c-qty">QTY</th>
+                  <th scope="col" class="c-unit">UNIT</th>
+                  <th scope="col" class="c-remarks">REMARKS <span class="th-note">사유 입력</span></th>
+                </tr>
+              </thead>
+              <tbody id="po-rows"></tbody>
+              <tbody id="po-cancelled"></tbody>
+            </table>
+          </div>
+          <p id="shown" class="shown" role="status"></p>
+
+          <section id="gone" class="gone" aria-labelledby="gone-title">
+            <h4 id="gone-title"></h4>
+            <p class="gone-lead">최신 파일에서 사라진 주문입니다. 출하 완료인지 주문 취소인지는 전산자료만으로 알 수 없어 직접 골라야 합니다. 주문 취소는 위 표 맨 아래에 Order cancelled 줄로 들어가고, 출하 완료는 엑셀에 넣지 않습니다.</p>
+            <ul id="gone-list" class="list"></ul>
+          </section>
         </section>
       </main>
     </div>

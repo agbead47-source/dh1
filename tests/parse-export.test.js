@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import ExcelJS from 'exceljs';
-import { parseExcel, matrixToRows } from '../src/parse.js';
+import { parseExcel, parseWorkbook, matrixToRows } from '../src/parse.js';
 import { prepare } from '../src/normalize.js';
 import { diffOrders } from '../src/diff.js';
 import { buildExportRows, buildWorkbook, exportFileName } from '../src/export.js';
@@ -138,5 +138,78 @@ describe('exportFileName', () => {
   it('납품처와 생성일로 파일명을 만든다', () => {
     expect(exportFileName('Herth+Buss', new Date(2026, 10, 20))).toBe('DELIVERY SCHEDULE_Herth+Buss_2026.11.20.xlsx');
     expect(exportFileName('A/B', new Date(2026, 0, 5))).toBe('DELIVERY SCHEDULE_A_B_2026.01.05.xlsx');
+  });
+});
+
+// 직전에 고객에게 보낸 Delivery Schedule(Pending Order 시트)을 이전 파일로 올리는 경우
+async function makeScheduleXlsx() {
+  const wb = new ExcelJS.Workbook();
+  wb.addWorksheet('Shipped Orders').addRow(['ORDER DATE', 'EXW', 'PO NO.']);
+  const ws = wb.addWorksheet('Pending Order');
+  ws.addRow(['ORDER DATE', 'DELIVERY DATE', 'Previous EXW', 'Updated EXW', 'SHIP TO', 'PO NO.', 'PART NO.', 'PART NAME', 'QTY', 'UNIT', 'REMARKS']);
+  const d = (m, day) => new Date(Date.UTC(2026, m - 1, day));
+  ws.addRow([d(7, 1), d(10, 30), d(11, 10), d(11, 18), 'ALPHA ', 'PO-1001', 'A100', 'H4 12V 60/55W STD', 1500, 'PCS', 'INV-01 (ETD 11/20)']);
+  ws.addRow([d(7, 5), d(11, 1), d(11, 18), d(11, 18), 'ALPHA ', 'PO-1003', 'A300', 'H1 12V 55W STD', 2000, 'PCS', null]);
+  ws.addRow([d(7, 20), d(11, 5), d(11, 20), null, 'ALPHA ', 'PO-1012', 123400, 'H3 12V 55W STD', 900, 'PCS', 'Schedule under review']);
+  return wb.xlsx.writeBuffer();
+}
+
+describe('Delivery Schedule(Pending Order)을 이전 파일로 읽기', () => {
+  it('출하계획 시트가 없고 Pending Order 시트가 있으면 일정표로 읽는다', async () => {
+    const result = await parseWorkbook(await makeScheduleXlsx());
+    expect(result.source).toBe('schedule');
+    expect(result.rows).toHaveLength(3);
+    expect(result.rows[0]).toMatchObject({
+      납품처: 'ALPHA ',
+      고객PO번호: 'PO-1001',
+      고객품번: 'A100',
+      계획수량: 1500,
+      이전REMARKS: 'INV-01 (ETD 11/20)',
+      출처: 'schedule',
+    });
+    expect(result.rows[0]['공장출하일']).toEqual(new Date(Date.UTC(2026, 10, 18))); // Updated EXW
+    expect(result.rows[0]['희망납기']).toEqual(new Date(Date.UTC(2026, 9, 30))); // DELIVERY DATE
+  });
+
+  it('전산자료는 그대로 erp로 읽는다', async () => {
+    expect((await parseWorkbook(await makeXlsx())).source).toBe('erp');
+  });
+
+  it('두 시트가 모두 없으면 두 이름을 다 알려준다', async () => {
+    const wb = new ExcelJS.Workbook();
+    wb.addWorksheet('Sheet1').addRow(['a']);
+    await expect(parseWorkbook(await wb.xlsx.writeBuffer())).rejects.toThrow(/출하계획.*Pending Order/);
+  });
+
+  it('일정표의 희망 납기와 REMARKS를 주문에 보관하고 EXW가 빈 줄도 읽는다', async () => {
+    const { orders } = prepare(await parseExcel(await makeScheduleXlsx()));
+    const list = [...orders.values()];
+    expect(list.map((o) => [o.shipTo, o.po, o.partNo, o.lines[0].date])).toEqual([
+      ['ALPHA', 'PO-1001', 'A100', '2026-11-18'],
+      ['ALPHA', 'PO-1003', 'A300', '2026-11-18'],
+      ['ALPHA', 'PO-1012', '123400', ''],
+    ]);
+    expect(list[0]).toMatchObject({ deliveryDate: '2026-10-30', remarksByDate: { '2026-11-18': 'INV-01 (ETD 11/20)' }, fromSchedule: true });
+    expect(list[1].remarksByDate).toEqual({});
+  });
+
+  it('이전=일정표, 최신=전산자료로 비교하면 희망 납기와 변경 없는 줄의 REMARKS를 넘겨받는다', async () => {
+    const prev = prepare(await parseExcel(await makeScheduleXlsx())).orders;
+    const curr = prepare(currRaw).orders;
+    const ch = diffOrders(prev, curr);
+    const out = buildExportRows({ shipTo: 'ALPHA', changes: ch, reasons: new Map([[ch.find((c) => c.po === 'PO-1003').key, { code: 'production', text: '' }]]) });
+    const row = (po) => out.find((r) => r.po === po);
+    // 변경 없는 줄: 지난 표의 REMARKS 유지
+    expect(row('PO-1001')).toMatchObject({ status: 'same', deliveryDate: '2026-10-30', remarks: 'INV-01 (ETD 11/20)' });
+    // 변경된 줄: 이번 사유로 바뀜, 희망 납기는 유지
+    expect(row('PO-1003')).toMatchObject({ status: 'changed', deliveryDate: '2026-11-01', prevExw: '2026-11-18', exw: '2026-12-01', remarks: 'Delayed due to production schedule' });
+    // 지난 표에 없던 주문: 희망 납기 모름
+    expect(row('PO-1008')).toMatchObject({ status: 'new', deliveryDate: '' });
+  });
+
+  it('일정표에는 점 정보가 없으므로 이번에 재등록으로 단정하지 않는다', async () => {
+    const prev = prepare(await parseExcel(await makeScheduleXlsx())).orders;
+    const ch = diffOrders(prev, prepare(currRaw).orders);
+    expect(ch.find((c) => c.po === 'PO-1001').reissue).toEqual({ dotted: true, newlyDotted: false, mixed: false });
   });
 });
