@@ -20,6 +20,12 @@ const signed = (n) => (n > 0 ? `+${num(n)}` : `−${num(-n)}`);
 const shipName = (name) => name || '(납품처 없음)';
 const pct = (value, max) => (max > 0 ? Math.round((value / max) * 1000) / 10 : 0);
 
+/** 날짜는 월-일이 먼저 읽히게 연도를 흐리게 한다. 글자는 그대로라 복사하면 YYYY-MM-DD다. */
+const dateHtml = (v) => {
+  const m = /^(\d{4}-)(\d{2}-\d{2})$/.exec(String(v ?? ''));
+  return m ? `<span class="yr">${m[1]}</span>${m[2]}` : esc(v);
+};
+
 /** 버튼 묶음을 다시 그려도 키보드 포커스가 같은 버튼에 남게 한다. */
 function setHtmlKeepFocus(el, html) {
   const active = document.activeElement;
@@ -86,7 +92,7 @@ export function renderSideProgress(el, data) {
 }
 
 export function renderExportWarn(el, missing) {
-  el.textContent = missing ? `사유 미입력 ${num(missing)}건. 이대로 내려받을 수도 있습니다.` : '';
+  el.textContent = missing ? `사유 미입력 ${num(missing)}건. 그대로 내려받을 수도 있습니다.` : '';
 }
 
 // ---------- 본문 머리, 빈 상태 ----------
@@ -123,26 +129,29 @@ export function renderEmpty(el, files, errors, ready) {
  */
 export function renderCards(el, data, view) {
   const onlyMissing = view === 'missing';
+  const d = data ?? {};
   const card = (label, key, sub, alert) => {
     const value = data ? data[key] : null;
     const shown = value === null ? '–' : num(value);
     const cls = `card${alert && value ? ' is-alert' : ''}${value === null ? ' is-blank' : ''}`;
     const inner = `<span class="card-label">${label}</span><span class="card-value">${shown}</span><span class="card-sub">${data ? sub : ''}</span>`;
     if (key !== 'missing' || !data) return `<div class="${cls}">${inner}</div>`;
-    return `<button type="button" class="${cls} card-btn" data-action="missing" data-key="missing" aria-pressed="${onlyMissing}">${inner}</button>`;
+    // 할 일이 남았는지(빨강), 끝났는지(청록)를 카드 전체로 알린다. 누르면 무엇이 되는지는 밑줄 친 한 줄로 적는다
+    const todo = d.missing ? ' is-todo' : d.need ? ' is-done' : '';
+    const act = onlyMissing ? '변경만 보기로 돌아가기' : d.missing ? '미입력만 모아 보기' : '';
+    return `<button type="button" class="${cls}${todo} card-btn" data-action="missing" data-key="missing" aria-pressed="${onlyMissing}">${inner}${act ? `<span class="card-act">${act}</span>` : ''}</button>`;
   };
-  const d = data ?? {};
+  // 사유 미입력에는 표에 줄이 없는 "최신 파일에 없는 주문"도 들어 있다. 어디서 고르는지 적어 둔다
+  const inGone = d.goneMissing ? `. ${num(d.goneMissing)}건은 '최신 파일에 없는 주문' 탭` : '';
   const missingSub = !d.need
     ? '사유가 필요한 건 없음'
-    : onlyMissing
-      ? '미입력만 보는 중. 다시 누르면 변경만'
-      : d.missing
-        ? `${num(d.need)}건 중 ${num(d.need - d.missing)}건 입력. 눌러서 모아 보기`
-        : `${num(d.need)}건 모두 입력`;
+    : d.missing
+      ? `${num(d.need)}건 중 ${num(d.need - d.missing)}건 입력${inGone}`
+      : `${num(d.need)}건 모두 입력. 내려받을 수 있습니다`;
   setHtmlKeepFocus(
     el,
-    card('전체 주문 행', 'lines', d.cancelledLines ? `엑셀에 나가는 줄. 주문 취소 ${num(d.cancelledLines)}줄 포함` : '엑셀에 나가는 줄. 변경 없는 줄 포함') +
-      card('변경 건', 'changed', `주문 ${num(d.orders ?? 0)}건 중`) +
+    card('엑셀에 나가는 줄', 'lines', d.cancelledLines ? `변경 없는 줄 포함, 주문 취소 ${num(d.cancelledLines)}줄 포함` : '변경 없는 줄 포함') +
+      card('변경된 주문', 'changed', `주문 ${num(d.orders ?? 0)}건 중`) +
       card(`${DELAY_ALERT_DAYS}일 이상 지연`, 'delayed', d.maxDelay > 0 ? `가장 큰 지연 ${num(d.maxDelay)}일` : '늦어진 주문 없음', true) +
       card('사유 미입력', 'missing', missingSub, true),
   );
@@ -177,7 +186,7 @@ export function renderTypeChart(el, counts, active) {
 }
 
 /** 지연이 큰 주문 상위(선택한 고객사). items는 delayDays 내림차순, total은 지연된 주문 전체 수. */
-export function renderDelayChart(el, items, total) {
+export function renderDelayChart(el, items, total, showShip = false) {
   if (!items) {
     el.innerHTML = chartEmpty(NO_DATA);
     return;
@@ -192,7 +201,7 @@ export function renderDelayChart(el, items, total) {
       const alert = c.delayDays >= DELAY_ALERT_DAYS;
       return `
       <li class="delay-row${alert ? ' is-alert' : ''}">
-        <span class="delay-name"><b>${esc(c.po)}</b> ${esc(c.partNo)}</span>
+        <span class="delay-name">${showShip ? `<span class="ship-of">${esc(shipName(c.shipTo))}</span> ` : ''}<b>${esc(c.po)}</b> ${esc(c.partNo)}</span>
         <span class="bar-value">${num(c.delayDays)}일${alert ? '<span class="delay-flag">기준 초과</span>' : ''}</span>
         <span class="bar-track"><span class="bar-fill" style="width:${pct(c.delayDays, max)}%"></span></span>
       </li>`;
@@ -288,13 +297,14 @@ function reissueHtml(c) {
 const showReissue = (c) => c.type !== 'same' || c.reissue?.mixed || c.reissue?.newlyDotted;
 
 function deltaHtml(c) {
+  // "얼마나 바뀌었나"는 배지 바로 아래에 굵은 글자로. 기준일 이상 지연만 빨간 바탕이다
   const tags = [];
   if (c.delayDays > 0) {
-    tags.push(`<span class="tag${c.delayDays >= DELAY_ALERT_DAYS ? ' is-alert' : ''}">${num(c.delayDays)}일 지연</span>`);
+    tags.push(`<span class="delta${c.delayDays >= DELAY_ALERT_DAYS ? ' is-alert' : ''}">${num(c.delayDays)}일 지연</span>`);
   } else if (c.delayDays < 0) {
-    tags.push(`<span class="tag">${num(-c.delayDays)}일 앞당김</span>`);
+    tags.push(`<span class="delta is-early">${num(-c.delayDays)}일 앞당김</span>`);
   }
-  if (c.qtyDiff && c.type !== 'new') tags.push(`<span class="tag">수량 ${signed(c.qtyDiff)}</span>`);
+  if (c.qtyDiff && c.type !== 'new') tags.push(`<span class="delta">수량 ${signed(c.qtyDiff)}</span>`);
   return tags.join('');
 }
 
@@ -325,17 +335,19 @@ function rowHtml({ row: r, id, change: c, lead, editor, sel }) {
     : r.type === 'same'
       ? ''
       : `<span class="badge badge-${r.type}">${TYPE_LABELS[r.type]}</span>`;
-  const marks = badge + (lead && !cancelled ? deltaHtml(c) : '') + (lead && c ? COMPARE_BUTTON : '');
+  // 변경 칸에는 "무엇이, 얼마나"만 둔다. 재등록 표시와 비교 버튼은 PO 아래로 내려 한 단계 가볍게
+  const marks = badge + (lead && !cancelled ? deltaHtml(c) : '');
+  const sub = (lead && showReissue(c) ? reissueHtml(c) : '') + (lead && c ? COMPARE_BUTTON : '');
   const missing = !cancelled && needsReason(r.type) && !isFilled(sel);
   return `
     <tr class="st-${r.status}${missing ? ' is-missing' : ''}" data-id="${id}">
       <td class="c-mark">${marks ? `<div class="marks">${marks}</div>` : ''}</td>
-      <td class="c-order">${esc(r.orderDate)}</td>
-      <td class="c-delivery">${esc(r.deliveryDate)}</td>
-      <td class="c-prev">${esc(r.prevExw)}</td>
-      <td class="c-exw${r.exwChanged ? ' is-changed' : ''}">${esc(r.exw)}</td>
+      <td class="c-order">${dateHtml(r.orderDate)}</td>
+      <td class="c-delivery">${dateHtml(r.deliveryDate)}</td>
+      <td class="c-prev${r.exwChanged ? ' is-changed' : ''}">${dateHtml(r.prevExw)}</td>
+      <td class="c-exw${r.exwChanged ? ' is-changed' : ''}">${dateHtml(r.exw)}</td>
       <td class="c-ship">${esc(r.shipTo)}</td>
-      <td class="c-po">${esc(r.po)}${lead && showReissue(c) ? reissueHtml(c) : ''}</td>
+      <td class="c-po"><span class="po-no">${esc(r.po)}</span>${sub ? `<div class="po-sub">${sub}</div>` : ''}</td>
       <td class="c-partno">${esc(r.partNo)}</td>
       <td class="c-name">${esc(r.partName)}</td>
       <td class="c-qty">${num(r.qty)}</td>
@@ -403,9 +415,9 @@ export function renderShipped(el, rows) {
       return `
       <tr class="${added ? 'st-new' : 'st-same'}">
         <td class="c-mark">${added ? '<span class="badge badge-new">이번에 추가</span>' : ''}</td>
-        <td class="c-date">${esc(r.orderDate)}</td>
-        <td class="c-date c-delivery">${esc(r.deliveryDate)}</td>
-        <td class="c-date">${esc(r.exw)}</td>
+        <td class="c-date">${dateHtml(r.orderDate)}</td>
+        <td class="c-date c-delivery">${dateHtml(r.deliveryDate)}</td>
+        <td class="c-date">${dateHtml(r.exw)}</td>
         <td class="c-date">${shipCell(r.etd, added)}</td>
         <td class="c-date">${shipCell(r.eta, added)}</td>
         <td>${esc(r.shipTo)}</td>
@@ -442,24 +454,23 @@ export function renderGoneTitle(el, total, missing) {
   el.innerHTML = `확인할 주문 ${num(total)}건${missing ? ` <span class="tag is-alert">미선택 ${num(missing)}건</span>` : ''}`;
 }
 
-/** items: { id, change, sel } */
-export function renderGone(el, items) {
+/** items: { id, change, sel }. showShip이면(전체 고객사 보기) 주문마다 납품처를 적는다. */
+export function renderGone(el, items, showShip = false) {
   el.innerHTML = items
     .map(({ id, change: c, sel }) => {
       const lines = c.prev.lines
         .map(
           (l) =>
-            `<div><span class="d">${esc(l.date || '출하일 미정')}</span><span class="q">${num(l.qty)}<span class="u">${esc(c.prev.unit)}</span></span></div>`,
+            `<div><span class="d">${l.date ? dateHtml(l.date) : '출하일 미정'}</span><span class="q">${num(l.qty)}<span class="u">${esc(c.prev.unit)}</span></span></div>`,
         )
         .join('');
       return `
       <li class="row gone-row${isFilled(sel) ? '' : ' is-missing'}" data-id="${id}">
         <span class="badge badge-gone">${TYPE_LABELS.gone}</span>
         <div class="ident">
-          <div class="po">${esc(c.po)}</div>
+          <div class="po">${showShip ? `<span class="ship-of">${esc(shipName(c.shipTo))}</span> ` : ''}${esc(c.po)}</div>
           <div class="part"><span>${esc(c.partNo)}</span>${esc(c.partName)}</div>
-          ${reissueHtml(c)}
-          ${COMPARE_BUTTON}
+          <div class="po-sub">${reissueHtml(c)}${COMPARE_BUTTON}</div>
         </div>
         <div class="lines"><span class="visually-hidden">이전 출하 계획</span>${lines}</div>
         <div class="reason">${reasonHtml(c, sel)}<span class="gone-note">${goneNote(sel?.code ?? '')}</span></div>
@@ -483,7 +494,7 @@ function sourcesHtml(title, fileName, order, sources) {
         <tbody>${sources
           .map(
             (s) =>
-              `<tr><td>${esc(s.date || '미정')}</td><td>${esc(s.erpPo)}</td><td>${esc(s.itemCode)}</td><td>${esc(s.maker)}</td><td>${esc(s.orderNo)}</td><td class="n">${num(s.qty)}</td></tr>`,
+              `<tr><td>${s.date ? dateHtml(s.date) : '미정'}</td><td>${esc(s.erpPo)}</td><td>${esc(s.itemCode)}</td><td>${esc(s.maker)}</td><td>${esc(s.orderNo)}</td><td class="n">${num(s.qty)}</td></tr>`,
           )
           .join('')}</tbody>
       </table></div>`;
@@ -508,7 +519,7 @@ export function renderCompare(el, c, d, names) {
   const dateRows = d.dates
     .map(
       (r) => `<tr class="ds-${r.state}">
-        <td>${esc(r.date || '출하일 미정')}</td>
+        <td>${r.date ? dateHtml(r.date) : '출하일 미정'}</td>
         <td class="n">${qtyCell(r.prevQty)}</td>
         <td class="n">${qtyCell(r.currQty)}</td>
         <td class="n diff">${diffCell(r.diff)}</td>
@@ -521,7 +532,7 @@ export function renderCompare(el, c, d, names) {
     <header class="cmp-head">
       <div class="marks"><span class="badge badge-${c.type === 'same' ? 'same' : c.type}">${c.type === 'same' ? '변경 없음' : TYPE_LABELS[c.type]}</span>${deltaHtml(c)}</div>
       <h3 id="compare-title">${esc(c.po)} <span class="cmp-part">${esc(c.partNo)}</span></h3>
-      <p class="cmp-sub">${esc(shipName(c.shipTo))} · ${esc(c.partName)}</p>
+      <p class="cmp-sub"><span class="ship-of">${esc(shipName(c.shipTo))}</span> ${esc(c.partName)}</p>
     </header>
     ${notes.map((n) => `<p class="cmp-note">${n}</p>`).join('')}
 

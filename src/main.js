@@ -167,7 +167,9 @@ function renderSelection() {
   const delayed = forShipTo()
     .filter((c) => isChanged(c) && c.delayDays > 0)
     .sort((a, b) => b.delayDays - a.delayDays);
-  ui.renderDelayChart(el.delayChart, delayed.slice(0, ui.DELAY_TOP_N), delayed.length);
+  ui.renderDelayChart(el.delayChart, delayed.slice(0, ui.DELAY_TOP_N), delayed.length, state.shipTo === ALL);
+  // 좁은 화면의 카드형 표에서 SHIP TO는 전체 고객사를 볼 때만 보인다
+  el.table.classList.toggle('one-ship', state.shipTo !== ALL);
   el.optLabel.placeholder = autoLabel();
   el.exportFile.textContent = `파일명: ${fileName()}`;
   renderTable();
@@ -204,6 +206,8 @@ function renderCounts(rows = exportRows()) {
     need: changed.filter((c) => needsReason(c.type)).length,
     missing: changed.filter(isMissing).length,
   };
+  const gone = all.filter((c) => c.type === 'gone');
+  const goneMissing = gone.filter(isMissing).length;
   ui.renderCards(
     el.cards,
     {
@@ -213,6 +217,7 @@ function renderCounts(rows = exportRows()) {
       changed: changed.length,
       delayed: changed.filter((c) => c.delayDays >= ui.DELAY_ALERT_DAYS).length,
       maxDelay: Math.max(0, ...changed.map((c) => c.delayDays)),
+      goneMissing,
       ...progress,
     },
     state.view,
@@ -229,8 +234,6 @@ function renderCounts(rows = exportRows()) {
   renderSteps(progress);
   ui.renderExportWarn(el.warn, progress.missing);
   ui.renderShown(el.shown, el.table.querySelectorAll('tbody tr[data-id]').length, rows.length);
-  const gone = all.filter((c) => c.type === 'gone');
-  const goneMissing = gone.filter(isMissing).length;
   ui.renderTabs(
     el.tabs,
     { pending: rows.length, shipped: shippedRows().length, gone: gone.length, goneMissing },
@@ -308,7 +311,7 @@ function renderGone() {
     .filter(({ change: c }) => inScope(c) && c.type === 'gone');
   el.gone.hidden = !items.length;
   el.goneEmpty.hidden = items.length > 0;
-  ui.renderGone(el.goneList, items);
+  ui.renderGone(el.goneList, items, state.shipTo === ALL);
 }
 
 // ---------- 파일 읽기 ----------
@@ -532,9 +535,16 @@ el.optDelivery.addEventListener('change', () => {
   if (isReady()) renderCounts();
 });
 
+/** 줄 배경색 범례의 문구는 용도에 따라 다르다(고객 발송용 엑셀에는 색이 없다). */
+const syncStyle = () => {
+  el.review.dataset.style = el.optStyle.value;
+};
+syncStyle();
+
 // 발송용 설정을 바꾸면 이미 내려받은 파일과 달라지므로 다시 받아야 한다
 for (const input of [el.optStyle, el.optShipped, el.optLabel]) {
   input.addEventListener('input', () => {
+    syncStyle();
     state.downloaded.delete(state.shipTo);
     if (!isReady()) return;
     el.exportFile.textContent = `파일명: ${fileName()}`;
