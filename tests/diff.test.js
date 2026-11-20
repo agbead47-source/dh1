@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { prepare, makeKey } from '../src/normalize.js';
-import { diffOrders, classify, daysBetween, pairPrevDates } from '../src/diff.js';
+import { diffOrders, classify, daysBetween, pairPrevDates, compareChange } from '../src/diff.js';
 import prevRaw from './fixtures/prev.json';
 import currRaw from './fixtures/curr.json';
 
@@ -147,5 +147,59 @@ describe('pairPrevDates', () => {
 
   it('prev가 없으면 빈칸', () => {
     expect(pairPrevDates([], lines('2026-11-18'))).toEqual(['']);
+  });
+});
+
+describe('compareChange (이전·최신 나란히 비교)', () => {
+  const byPo = (po) => changes.find((c) => c.po === po);
+
+  it('출하일별로 이전 수량과 최신 수량을 맞춰 놓는다', () => {
+    // 분할: 11-18 10,000 → 11-18 6,000 + 12-02 4,000
+    expect(compareChange(byPo('PO-1006'))).toMatchObject({
+      dates: [
+        { date: '2026-11-18', prevQty: 10000, currQty: 6000, diff: -4000, state: 'changed' },
+        { date: '2026-12-02', prevQty: null, currQty: 4000, diff: 4000, state: 'added' },
+      ],
+      prevTotal: 10000,
+      currTotal: 10000,
+      qtyDiff: 0,
+      delayDays: 14,
+    });
+  });
+
+  it('날짜가 옮겨지면 빠진 날짜와 생긴 날짜가 따로 보인다', () => {
+    expect(compareChange(byPo('PO-1003')).dates).toEqual([
+      { date: '2026-11-18', prevQty: 2000, currQty: null, diff: -2000, state: 'removed' },
+      { date: '2026-12-01', prevQty: null, currQty: 2000, diff: 2000, state: 'added' },
+    ]);
+  });
+
+  it('변경 없는 날짜는 same', () => {
+    expect(compareChange(byPo('PO-1002')).dates).toEqual([
+      { date: '2026-11-20', prevQty: 120000, currQty: 120000, diff: 0, state: 'same' },
+    ]);
+  });
+
+  it('신규와 사라짐은 한쪽이 비어 있다', () => {
+    expect(compareChange(byPo('PO-1008'))).toMatchObject({ prevTotal: null, currTotal: 2400, qtyDiff: null, prevSources: [] });
+    expect(compareChange(byPo('PO-1009'))).toMatchObject({ prevTotal: 800, currTotal: null, currSources: [] });
+  });
+
+  it('전산에 등록된 원본 행(품목코드, 제조사, 수주번호, 전산 PO)을 이전·최신 각각 보여 준다', () => {
+    // 품목코드 배분만 바뀐 주문: 고객 기준으로는 same이지만 전산 행은 다르다
+    const d = compareChange(byPo('PO-1002'));
+    expect(d.prevSources.map((s) => [s.maker, s.itemCode, s.qty])).toEqual([
+      ['106', 'FX0000000003', 60000],
+      ['110', 'FX0000000004', 60000],
+    ]);
+    expect(d.currSources.map((s) => [s.maker, s.itemCode, s.qty])).toEqual([
+      ['106', 'FX0000000003', 40000],
+      ['110', 'FX0000000004', 80000],
+    ]);
+    expect(d.sourcesChanged).toBe(true);
+    // 점 찍어 재등록된 주문: 전산 PO 표기가 보인다
+    expect(compareChange(byPo('PO-1005')).currSources[0]).toMatchObject({ erpPo: 'PO-1005.', date: '2026-11-20', qty: 3000, orderNo: 'T000000007' });
+    expect(compareChange(byPo('PO-1003')).sourcesChanged).toBe(true);
+    expect(compareChange(byPo('PO-1010')).sourcesChanged).toBe(false);
   });
 });

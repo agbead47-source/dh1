@@ -75,6 +75,7 @@ export function normalizeRows(rawRows) {
     rows.push({
       key: makeKey(shipTo, po, partNo),
       shipTo,
+      soldTo: text(raw['매출처']),
       po,
       erpPo,
       dotted,
@@ -136,6 +137,15 @@ export function aggregate(rows) {
     const line = o.byDate.get(r.date) ?? { date: r.date, qty: 0, sources: 0 };
     line.qty += r.qty;
     line.sources++;
+    // 합산 전의 전산 등록 행. 화면의 상세 비교에서 "어떤 행이 합쳐졌는지" 보여 주는 데 쓴다
+    (o.sources ??= []).push({
+      date: r.date,
+      qty: r.qty,
+      itemCode: r.itemCode,
+      maker: r.maker,
+      orderNo: r.orderNo,
+      erpPo: r.erpPo,
+    });
     o.byDate.set(r.date, line);
   }
 
@@ -147,14 +157,45 @@ export function aggregate(rows) {
     o.lines = all.map(({ date, qty }) => ({ date, qty }));
     o.total = o.lines.reduce((s, l) => s + l.qty, 0);
     o.erpPos.sort();
+    const by = (s) => [s.date, s.maker, s.itemCode, s.orderNo].join('\u001f');
+    o.sources.sort((a, b) => (by(a) < by(b) ? -1 : by(a) > by(b) ? 1 : 0));
     delete o.byDate;
   }
   return { orders, stats };
 }
 
-/** 원본 행 → 합산된 주문 Map과 정리 통계. */
+/** 빈 값을 뺀 가장 흔한 값. 없으면 빈 문자열. */
+function mostCommon(values) {
+  const count = new Map();
+  for (const v of values) if (v) count.set(v, (count.get(v) ?? 0) + 1);
+  return [...count].sort((a, b) => b[1] - a[1])[0]?.[0] ?? '';
+}
+
+/** 원본 행 → 합산된 주문 Map과 정리 통계. `stats.soldTo`는 파일의 매출처(파일명에 쓴다). */
 export function prepare(rawRows) {
   const { rows, stats } = normalizeRows(rawRows);
   const { orders, stats: aggStats } = aggregate(rows);
-  return { orders, stats: { ...stats, ...aggStats } };
+  return { orders, stats: { ...stats, ...aggStats, soldTo: mostCommon(rows.map((r) => r.soldTo)) } };
+}
+
+/** 일정표의 Shipped Orders 원본 행을 표준화한다(날짜는 문자열, 품번은 문자열, 납품처 공백 제거). */
+export function normalizeShipped(rawShipped) {
+  return rawShipped
+    .filter((r) => text(r.po) && text(r.partNo))
+    .map((r) => ({
+      orderDate: toDateStr(r.orderDate),
+      deliveryDate: toDateStr(r.deliveryDate),
+      exw: toDateStr(r.exw),
+      etd: toDateStr(r.etd),
+      eta: toDateStr(r.eta),
+      shipTo: text(r.shipTo),
+      invoiceNo: text(r.invoiceNo),
+      shipmentMode: text(r.shipmentMode),
+      po: cleanPo(r.po),
+      partNo: text(r.partNo),
+      partName: text(r.partName),
+      qty: toQty(r.qty),
+      unit: text(r.unit),
+      remarks: text(r.remarks),
+    }));
 }

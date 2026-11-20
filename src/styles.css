@@ -1,4 +1,8 @@
-/* 색, 글꼴, 간격은 첫 버전의 체계를 그대로 쓴다. 새로 만든 토큰은 --track, --side-w 두 개뿐이다. */
+/*
+  색, 글꼴, 간격은 첫 버전의 체계를 그대로 쓴다.
+  나중에 더한 토큰: --track, --side-w(대시보드 개편), --field(입력칸 테두리 대비 3:1),
+  --xl-*(Pending Order 표의 줄 배경. 내려받는 엑셀의 배경색과 같은 값).
+*/
 :root {
   --blue-green: #007082;
   --blue-green-dark: #005a69;
@@ -7,11 +11,15 @@
   --red-tint: #fbe9ec;
   --gray: #55555a;
   --light-gray: #c8c8c8;
+  --field: #8c8c91;
   --line: #e3e3e3;
   --track: #f0f0f0;
   --ink: #26262a;
   --bg: #fafafa;
   --white: #fff;
+  --xl-changed: #fff2cc;
+  --xl-new: #e2f0d9;
+  --xl-cancelled: #ededed;
   --radius: 8px;
   --side-w: 312px;
 }
@@ -30,6 +38,7 @@ body {
 h1,
 h2,
 h3,
+h4,
 p {
   margin: 0;
 }
@@ -49,9 +58,9 @@ p {
 
 select,
 input[type='text'] {
-  height: 36px;
+  height: 34px;
   padding: 0 10px;
-  border: 1px solid var(--light-gray);
+  border: 1px solid var(--field);
   border-radius: 6px;
   background: var(--white);
   color: var(--ink);
@@ -60,13 +69,16 @@ input[type='text'] {
 }
 
 select:disabled {
+  border-color: var(--light-gray);
   background: var(--bg);
   color: var(--gray);
 }
 
 select:focus-visible,
 input:focus-visible,
-button:focus-visible {
+button:focus-visible,
+summary:focus-visible,
+.table-wrap:focus-visible {
   outline: 2px solid var(--blue-green);
   outline-offset: 2px;
 }
@@ -91,7 +103,7 @@ button:focus-visible {
 }
 
 .side-head {
-  padding: 20px 20px 18px;
+  padding: 16px 20px 14px;
   background: var(--blue-green);
   color: var(--white);
 }
@@ -110,15 +122,10 @@ button:focus-visible {
 .side-block {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 16px 20px;
+  gap: 8px;
+  padding: 14px 20px;
   background: var(--white);
   border-bottom: 1px solid var(--line);
-}
-
-.side-title {
-  font-size: 14px;
-  font-weight: 700;
 }
 
 .side-hint {
@@ -132,13 +139,124 @@ button:focus-visible {
   border-bottom: 0;
 }
 
+.export-file {
+  overflow-wrap: anywhere;
+}
+
+/* 발송용 설정 */
+.send-opts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.send-opts legend {
+  padding: 0;
+  margin-bottom: 6px;
+}
+
+.field-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--gray);
+}
+
+.field-row select,
+.field-row input {
+  width: 100%;
+}
+
+.field-label {
+  font-size: 13px;
+  font-weight: 700;
+}
+
 #ship-to {
   width: 100%;
+  margin-top: -6px;
+}
+
+/* 작업 순서: 올리기 → 검토 → 내려받기. 상태는 색과 함께 글자로도 적는다 */
+.step-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.step-mark {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1.5px solid var(--field);
+  border-radius: 50%;
+  color: var(--gray);
+  font-size: 12px;
+  line-height: 1;
+}
+
+.step-status {
+  margin-left: auto;
+  color: var(--gray);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.step[data-state='todo'] .step-name {
+  color: var(--gray);
+}
+
+.step[data-state='current'] .step-mark {
+  border-color: var(--blue-green);
+  background: var(--blue-green-tint);
+  color: var(--blue-green-dark);
+}
+
+.step[data-state='done'] .step-mark {
+  border-color: var(--blue-green);
+  background: var(--blue-green);
+  color: transparent;
+}
+
+.step[data-state='done'] .step-mark::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  left: 7px;
+  width: 5px;
+  height: 9px;
+  border: solid var(--white);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.step[data-state='done'] .step-status {
+  color: var(--blue-green);
+}
+
+.step[data-state='error'] .step-mark {
+  border-color: var(--red);
+  color: var(--red);
+}
+
+.step[data-state='error'] .step-status,
+.step[data-step='review'][data-state='current'] .step-status {
+  color: var(--red);
 }
 
 .main {
   min-width: 0;
-  max-width: 1280px;
+  max-width: 1680px;
   padding: 24px 28px 64px;
 }
 
@@ -164,18 +282,18 @@ button:focus-visible {
 .upload {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .drop {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  min-height: 84px;
-  padding: 12px 14px;
+  gap: 2px;
+  min-height: 72px;
+  padding: 10px 12px;
   background: var(--white);
-  border: 1.5px dashed var(--light-gray);
+  border: 1.5px dashed var(--field);
   border-radius: var(--radius);
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s;
@@ -217,9 +335,10 @@ button:focus-visible {
 .drop-body {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
   color: var(--gray);
   font-size: 13px;
+  font-variant-numeric: tabular-nums;
 }
 
 .drop-body strong {
@@ -228,21 +347,52 @@ button:focus-visible {
   word-break: break-all;
 }
 
+.drop.is-error .drop-body strong {
+  color: var(--red);
+}
+
+.drop.is-error .drop-body span {
+  color: var(--ink);
+}
+
+.drop-kind {
+  color: var(--blue-green-dark);
+  font-weight: 700;
+}
+
+.drop-stat {
+  color: var(--ink);
+}
+
+.drop-extra,
+.drop-again {
+  font-size: 12px;
+}
+
+.drop-again {
+  text-decoration: underline;
+}
+
 .swap {
   align-self: center;
-  width: 36px;
-  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 2px 10px;
   border: 1px solid var(--light-gray);
-  border-radius: 50%;
+  border-radius: 14px;
   background: var(--white);
-  color: var(--blue-green);
-  font-size: 16px;
+  color: var(--blue-green-dark);
+  font: inherit;
+  font-size: 12px;
   cursor: pointer;
 }
 
 .swap:disabled {
-  color: var(--light-gray);
+  color: var(--gray);
   cursor: default;
+  opacity: 0.6;
 }
 
 .swap:not(:disabled):hover {
@@ -250,45 +400,73 @@ button:focus-visible {
   background: var(--blue-green-tint);
 }
 
-.summary-line:empty {
-  display: none;
-}
-
-.summary-line p {
-  color: var(--gray);
-  font-size: 13px;
-  font-variant-numeric: tabular-nums;
-}
-
-.summary-line p + p {
-  margin-top: 4px;
-}
-
-.summary-line b {
-  margin-right: 4px;
-  color: var(--ink);
-}
-
 .link-btn {
   align-self: flex-start;
   padding: 4px 0;
   border: 0;
   background: none;
-  color: var(--blue-green);
+  color: var(--blue-green-dark);
   font: inherit;
   font-size: 13px;
   text-decoration: underline;
   cursor: pointer;
 }
 
+/* ---------- 사유 입력 진행 ---------- */
+
+.progress,
+.side-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--gray);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.side-progress:empty {
+  display: none;
+}
+
+.progress-text {
+  white-space: nowrap;
+}
+
+.progress-text b {
+  color: var(--ink);
+}
+
+.progress .bar-track,
+.side-progress .bar-track {
+  flex: 1;
+  min-width: 72px;
+  height: 6px;
+}
+
+.progress.is-done .progress-text,
+.side-progress.is-done .progress-text,
+.progress.is-done .progress-text b,
+.side-progress.is-done .progress-text b {
+  color: var(--blue-green-dark);
+  font-weight: 700;
+}
+
 /* ---------- 빈 상태 ---------- */
 
 .empty-state {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
   margin-bottom: 16px;
-  padding: 18px 20px;
+  padding: 16px 20px;
   background: var(--blue-green-tint);
   border: 1px solid var(--blue-green);
   border-radius: var(--radius);
+}
+
+.empty-state.is-error {
+  background: var(--red-tint);
+  border-color: var(--red);
 }
 
 .empty-lead {
@@ -296,48 +474,12 @@ button:focus-visible {
   font-weight: 700;
 }
 
-.steps {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-  margin: 12px 0;
-  padding: 0;
-  list-style: none;
-  counter-reset: step;
-}
-
-.steps li {
-  counter-increment: step;
-  padding: 10px 12px;
-  background: var(--white);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  font-size: 14px;
-}
-
-.steps li::before {
-  content: counter(step) ". ";
-  font-weight: 700;
-}
-
-.step-state {
-  display: block;
-  color: var(--gray);
-  font-size: 12px;
-}
-
-.steps .is-done {
-  border-color: var(--blue-green);
-}
-
-.steps .is-done .step-state {
-  color: var(--blue-green);
-  font-weight: 700;
-}
-
 .empty-note {
-  color: var(--gray);
   font-size: 13px;
+}
+
+.empty-note .link-btn {
+  padding: 0;
 }
 
 /* ---------- 요약 카드 ---------- */
@@ -352,10 +494,13 @@ button:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 14px 16px;
+  padding: 12px 16px;
   background: var(--white);
   border: 1px solid var(--line);
   border-radius: var(--radius);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
 }
 
 .card-label {
@@ -364,10 +509,16 @@ button:focus-visible {
 }
 
 .card-value {
-  font-size: 28px;
+  font-size: 26px;
   font-weight: 700;
   line-height: 1.2;
   font-variant-numeric: tabular-nums;
+}
+
+.card-sub {
+  min-height: 18px;
+  color: var(--gray);
+  font-size: 12px;
 }
 
 .card.is-blank .card-value {
@@ -380,6 +531,29 @@ button:focus-visible {
 
 .card.is-alert .card-value {
   color: var(--red);
+}
+
+.card-btn {
+  cursor: pointer;
+}
+
+.card-btn .card-sub {
+  text-decoration: underline;
+}
+
+.card-btn:hover {
+  border-color: var(--blue-green);
+  background: var(--bg);
+}
+
+.card-btn.is-alert:hover,
+.card-btn.is-alert[aria-pressed='true'] {
+  border-color: var(--red);
+  background: var(--red-tint);
+}
+
+.card-btn[aria-pressed='true'] {
+  box-shadow: inset 0 0 0 1px currentColor;
 }
 
 /* ---------- 패널, 차트 ---------- */
@@ -416,6 +590,57 @@ button:focus-visible {
 
 .scope.is-all {
   color: var(--gray);
+}
+
+/* 표가 주인공이라 차트는 접어 둔다 */
+.charts-fold {
+  margin-top: 12px;
+}
+
+.charts-fold > summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 10px;
+  min-height: 40px;
+  padding: 8px 16px;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  font-size: 14px;
+  font-weight: 700;
+  list-style: none;
+  cursor: pointer;
+}
+
+.charts-fold > summary::-webkit-details-marker {
+  display: none;
+}
+
+.charts-fold > summary::before,
+.reissue > summary::after {
+  content: '';
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border: solid var(--gray);
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(-45deg);
+}
+
+.charts-fold[open] > summary::before,
+.reissue[open] > summary::after {
+  transform: rotate(45deg);
+}
+
+.charts-fold > summary:hover {
+  border-color: var(--blue-green);
+}
+
+.fold-note {
+  color: var(--gray);
+  font-size: 12px;
+  font-weight: 400;
 }
 
 .charts {
@@ -564,24 +789,32 @@ button:focus-visible {
   font-size: 12px;
 }
 
-/* ---------- 필터 칩 ---------- */
+/* ---------- 보기 전환, 유형 칩 ---------- */
 
 .chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 12px;
+  align-items: center;
+  gap: 6px;
+}
+
+.chips-label {
+  flex: none;
+  color: var(--gray);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .chip {
-  height: 32px;
+  height: 30px;
   padding: 0 12px;
   border: 1px solid var(--light-gray);
-  border-radius: 16px;
+  border-radius: 15px;
   background: var(--white);
   color: var(--gray);
   font: inherit;
   font-size: 13px;
+  white-space: nowrap;
   cursor: pointer;
 }
 
@@ -605,52 +838,322 @@ button:focus-visible {
   color: var(--white);
 }
 
-/* ---------- 변경 목록 ---------- */
+/* 유형 칩은 보기 전환보다 한 단계 가볍게 */
+.type-chips .chip {
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 6px;
+}
+
+.type-chips .chip.is-active {
+  border-color: var(--blue-green);
+  background: var(--blue-green-tint);
+  color: var(--blue-green-dark);
+  font-weight: 700;
+}
+
+.type-chips .chip.is-active b {
+  color: var(--blue-green-dark);
+}
+
+.chip-missing.has-missing {
+  border-color: var(--red);
+  color: var(--red);
+}
+
+.chip-missing.has-missing b {
+  color: var(--red);
+}
+
+.chip-missing.has-missing.is-active {
+  background: var(--red);
+  color: var(--white);
+}
+
+.chip-missing.has-missing.is-active b {
+  color: var(--white);
+}
+
+/* ---------- 시트 탭 ---------- */
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin: 8px 0 10px;
+  border-bottom: 1px solid var(--light-gray);
+}
+
+.tab {
+  min-height: 36px;
+  margin-bottom: -1px;
+  padding: 6px 14px;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: 6px 6px 0 0;
+  background: none;
+  color: var(--gray);
+  font: inherit;
+  font-size: 14px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.tab b {
+  margin-left: 4px;
+  font-size: 12px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.tab:hover {
+  color: var(--blue-green-dark);
+}
+
+.tab[aria-selected='true'] {
+  border-color: var(--light-gray);
+  background: var(--white);
+  box-shadow: inset 0 3px 0 var(--blue-green);
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.cell-todo {
+  color: var(--gray);
+  font-size: 12px;
+}
+
+.sh-table {
+  min-width: 1400px;
+}
+
+/* 줄이 없으면 안내 문구가 잘리지 않게 표를 패널 폭에 맞춘다 */
+.sh-table.is-empty {
+  min-width: 0;
+}
+
+.sh-table.is-empty thead {
+  display: none;
+}
+
+.sh-table td.c-date {
+  text-align: center;
+  white-space: nowrap;
+}
+
+.sh-table td.c-note {
+  min-width: 160px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+/* ---------- Pending Order 표 ---------- */
 
 .list-panel {
   margin-top: 12px;
 }
 
-.list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
+.list-panel .panel-head {
+  margin-bottom: 2px;
 }
 
-.list-head,
-.row {
-  display: grid;
-  grid-template-columns: 84px minmax(0, 1.1fr) minmax(0, 1.7fr) minmax(0, 1fr);
-  gap: 16px;
-  align-items: center;
-}
-
-.list-head {
-  padding: 8px 0;
-  border-bottom: 1px solid var(--light-gray);
+.panel-lead {
   color: var(--gray);
+  font-size: 13px;
+}
+
+.list-tools {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
+  margin: 0 -16px;
+  padding: 10px 16px;
+  background: var(--white);
+}
+
+.reason-tools {
+  flex: 1;
+  min-width: 220px;
+  max-width: 360px;
+  margin-left: auto;
+}
+
+/* 표는 제 안에서 스크롤한다. 머리 행은 위에, REMARKS 칸은 오른쪽에 붙어 있다 */
+.table-wrap {
+  max-height: calc(100vh - 96px);
+  overflow: auto;
+  border: 1px solid var(--light-gray);
+  border-radius: 6px;
+}
+
+.po-table {
+  width: 100%;
+  min-width: 1130px;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.po-table.no-delivery {
+  min-width: 1050px;
+}
+
+.po-table.no-delivery .c-delivery {
+  display: none;
+}
+
+.po-table th,
+.po-table td {
+  padding: 6px;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  background: var(--white);
+  text-align: left;
+  vertical-align: top;
+}
+
+.po-table th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--blue-green);
+  border-color: var(--blue-green-dark);
+  color: var(--white);
   font-size: 12px;
+  font-weight: 700;
+  line-height: 1.3;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.th-note {
+  display: block;
+  font-weight: 400;
+}
+
+.po-table .c-remarks {
+  position: sticky;
+  right: 0;
+  width: 228px;
+  min-width: 228px;
+  border-right: 0;
+  border-left: 1px solid var(--light-gray);
+}
+
+.po-table th.c-remarks {
+  z-index: 3;
+  border-left-color: var(--blue-green-dark);
+}
+
+.po-table td.c-order,
+.po-table td.c-delivery,
+.po-table td.c-prev,
+.po-table td.c-exw,
+.po-table td.c-unit {
+  text-align: center;
+  white-space: nowrap;
+}
+
+.po-table td.c-qty {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.po-table .c-mark {
+  width: 88px;
+}
+
+.po-table td.c-po {
+  min-width: 132px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.po-table td.c-partno {
+  overflow-wrap: anywhere;
+}
+
+.po-table td.c-name {
+  min-width: 150px;
+  overflow-wrap: anywhere;
+}
+
+/* 엑셀과 같은 표시: 바뀐 줄은 노란 배경, 신규는 초록 배경, 바뀐 EXW는 빨간 굵은 글자 */
+.po-table .st-changed td {
+  background: var(--xl-changed);
+}
+
+.po-table .st-new td {
+  background: var(--xl-new);
+}
+
+.po-table .st-cancelled td {
+  background: var(--xl-cancelled);
+}
+
+.po-table td.c-exw.is-changed {
+  color: var(--red);
   font-weight: 700;
 }
 
-.row {
-  padding: 12px 0;
-  border-top: 1px solid var(--line);
+.po-table tbody tr:hover td {
+  box-shadow: inset 0 1px 0 var(--field), inset 0 -1px 0 var(--field);
 }
 
-.row:first-child {
-  border-top: 0;
+/* 사유 미입력인 주문의 줄은 왼쪽에 빨간 띠 */
+.po-table tr.is-missing td.c-mark,
+.po-table tbody tr.is-missing:hover td.c-mark {
+  box-shadow: inset 4px 0 0 var(--red);
 }
 
-.empty {
+.marks {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+}
+
+.po-table .empty {
+  position: static;
   padding: 28px 16px;
   color: var(--gray);
+  font-size: 14px;
   text-align: center;
+}
+
+.remark-out {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.remark-out:empty {
+  display: none;
+}
+
+.reason + .remark-out {
+  margin-top: 4px;
+}
+
+.reason + .remark-out::before {
+  content: '엑셀 문구 ';
+  color: var(--gray);
+  font-size: 12px;
+}
+
+.shown {
+  margin-top: 8px;
+  color: var(--gray);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
 }
 
 .badge {
   justify-self: start;
-  padding: 2px 8px;
+  padding: 1px 7px;
   border-radius: 4px;
   color: var(--white);
   font-size: 12px;
@@ -677,6 +1180,144 @@ button:focus-visible {
   background: var(--gray);
 }
 
+.tag {
+  padding: 1px 7px;
+  border-radius: 4px;
+  background: var(--track);
+  color: var(--gray);
+  font-size: 12px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+/* 색 배경 위에서도 읽히도록 */
+.po-table .st-changed .tag:not(.is-alert):not(.is-reissue),
+.po-table .st-new .tag:not(.is-alert):not(.is-reissue) {
+  background: var(--white);
+}
+
+.tag.is-alert {
+  background: var(--red-tint);
+  color: var(--red);
+  font-weight: 700;
+}
+
+/* PO 끝의 점으로 구별한 잔여 재등록 표시. 누르면 전산 등록 PO와 뜻이 펼쳐진다 */
+.reissue {
+  margin-top: 3px;
+  font-weight: 400;
+}
+
+.reissue > summary {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  border-radius: 4px;
+  list-style: none;
+  cursor: pointer;
+}
+
+.reissue > summary::-webkit-details-marker {
+  display: none;
+}
+
+.tag.is-reissue {
+  background: var(--blue-green-tint);
+  color: var(--blue-green-dark);
+}
+
+.tag.is-reissue.is-new {
+  font-weight: 700;
+}
+
+.reissue-help {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+  padding: 6px 8px;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--gray);
+  font-size: 12px;
+}
+
+.reissue-help b {
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.reissue-help .is-alert {
+  color: var(--red);
+}
+
+.reason {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.reason select,
+.reason input {
+  width: 100%;
+  height: 30px;
+  font-size: 13px;
+}
+
+.reason-select.is-missing {
+  border-color: var(--red);
+  box-shadow: inset 0 0 0 1px var(--red);
+  color: var(--red);
+}
+
+/* ---------- 이전 파일에만 있는 주문 ---------- */
+
+.gone {
+  margin-top: 12px;
+}
+
+/* 확인용 탭: 아직 고르지 않은 건이 있으면 건수를 빨갛게 */
+.tab.is-alert b {
+  color: var(--red);
+}
+
+.gone h4 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.gone-lead {
+  max-width: 80ch;
+  margin-top: 2px;
+  color: var(--gray);
+  font-size: 13px;
+}
+
+.list {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1.4fr) minmax(150px, 0.8fr) 250px;
+  gap: 8px 16px;
+  align-items: start;
+  padding: 10px 0 10px 12px;
+  border-top: 1px solid var(--line);
+}
+
+.row.is-missing {
+  box-shadow: inset 4px 0 0 var(--red);
+}
+
 .po {
   font-weight: 700;
   word-break: break-all;
@@ -694,12 +1335,8 @@ button:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
-.change {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  gap: 4px 10px;
-  align-items: center;
-  font-size: 14px;
+.lines {
+  font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -707,91 +1344,23 @@ button:focus-visible {
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
-  gap: 0 10px;
+  gap: 0 12px;
 }
 
 .lines .q {
+  margin-left: auto;
   white-space: nowrap;
 }
 
-.lines.is-none {
-  color: var(--gray);
-}
-
-.change .lines:first-child {
-  color: var(--gray);
-}
-
-.arrow {
-  color: var(--gray);
-}
-
-.tags {
-  grid-column: 1 / -1;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.tag {
-  padding: 1px 7px;
-  border-radius: 4px;
-  background: var(--track);
+.lines .u {
+  margin-left: 4px;
   color: var(--gray);
   font-size: 12px;
 }
 
-.tag.is-alert {
-  background: var(--red-tint);
-  color: var(--red);
-  font-weight: 700;
-}
-
-/* PO 끝의 점으로 구별한 잔여 재등록 표시 */
-.reissue {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 6px;
-  margin-top: 4px;
-}
-
-.tag.is-reissue {
-  background: var(--blue-green-tint);
-  color: var(--blue-green-dark);
-}
-
-.tag.is-reissue.is-new {
-  background: var(--blue-green);
-  color: var(--white);
-  font-weight: 700;
-}
-
-.erp-po {
+.gone-note {
   color: var(--gray);
   font-size: 12px;
-  overflow-wrap: anywhere;
-}
-
-.reason {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.reason select,
-.reason input {
-  width: 100%;
-}
-
-.reason-select.is-missing {
-  border-color: var(--red);
-  color: var(--red);
-}
-
-.no-reason {
-  color: var(--gray);
-  font-size: 13px;
 }
 
 /* ---------- 출력 ---------- */
@@ -830,6 +1399,7 @@ button:focus-visible {
   background: var(--blue-green);
   color: var(--white);
   font: inherit;
+  font-size: 14px;
   font-weight: 700;
   cursor: pointer;
 }
@@ -844,7 +1414,7 @@ button:focus-visible {
   cursor: default;
 }
 
-/* ---------- 좁은 본문: 차트 2단, 목록 행은 위아래로 ---------- */
+/* ---------- 좁은 본문: 차트 2단 ---------- */
 
 @media (max-width: 1240px) {
   .charts {
@@ -853,21 +1423,20 @@ button:focus-visible {
   .charts .panel:last-child {
     grid-column: 1 / -1;
   }
-  .list-head {
-    display: none;
+  .cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .row {
     grid-template-columns: auto minmax(0, 1fr);
-    gap: 8px 12px;
-    align-items: start;
   }
-  .row .change,
+  .row .lines,
   .row .reason {
     grid-column: 1 / -1;
+    max-width: 420px;
   }
 }
 
-/* ---------- 좁은 화면: 사이드바를 위로 접어 한 단으로. 출력 영역은 목록 아래로 보낸다 ---------- */
+/* ---------- 좁은 화면: 사이드바를 위로 접어 한 단으로. 출력 영역은 표 아래로 보낸다 ---------- */
 
 @media (max-width: 900px) {
   .layout {
@@ -891,10 +1460,6 @@ button:focus-visible {
     margin-top: 0;
     padding-bottom: 32px;
   }
-  .cards,
-  .steps {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
   .charts {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -903,8 +1468,383 @@ button:focus-visible {
   }
 }
 
+/* ---------- 휴대폰 폭 ---------- */
+
+@media (max-width: 700px) {
+  .panel {
+    padding: 12px;
+  }
+  .list-tools {
+    margin: 0 -12px;
+    padding: 8px 12px;
+  }
+  /* 칩은 한 줄로 두고 옆으로 민다 */
+  .list-tools .chips {
+    flex-wrap: nowrap;
+    max-width: 100%;
+    margin: -4px;
+    padding: 4px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .list-tools .chips::-webkit-scrollbar {
+    display: none;
+  }
+  .list-tools .chips .chip {
+    flex: none;
+  }
+  .tab {
+    padding: 6px 10px;
+  }
+  .reason-tools {
+    max-width: none;
+  }
+}
+
+/*
+  ---------- 표를 다 펼칠 폭이 안 될 때: 한 줄을 카드로 접는다 ----------
+  값과 순서는 표와 같다. SHIP TO만 숨긴다(지금 고른 고객사 하나뿐이라서).
+*/
+
+@media (max-width: 1100px) {
+  .pending-wrap {
+    max-height: none;
+    overflow: visible;
+    border: 0;
+    border-top: 1px solid var(--light-gray);
+    border-radius: 0;
+  }
+  .pending-table,
+  .pending-table.no-delivery {
+    min-width: 0;
+  }
+  .pending-table,
+  .pending-table tbody,
+  .pending-table td {
+    display: block;
+  }
+  .pending-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .pending-table tr {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+    gap: 4px 8px;
+    padding: 10px 10px 10px 12px;
+    border-bottom: 1px solid var(--light-gray);
+    background: var(--white);
+  }
+  .pending-table tr.st-changed {
+    background: var(--xl-changed);
+  }
+  .pending-table tr.st-new {
+    background: var(--xl-new);
+  }
+  .pending-table tr.st-cancelled {
+    background: var(--xl-cancelled);
+  }
+  .pending-table tr.is-missing {
+    box-shadow: inset 4px 0 0 var(--red);
+  }
+  .pending-table td,
+  .pending-table .c-remarks {
+    position: static;
+    width: auto;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: none !important;
+    box-shadow: none !important;
+    text-align: left !important;
+  }
+  .pending-table td.c-ship {
+    display: none;
+  }
+  .pending-table td.c-mark,
+  .pending-table td.c-po,
+  .pending-table td.c-remarks {
+    grid-column: 1 / -1;
+  }
+  .pending-table td.c-name {
+    grid-column: 2 / -1;
+  }
+  .pending-table td.c-mark:empty,
+  .pending-table td.c-remarks:empty {
+    display: none;
+  }
+  .marks {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .pending-table td.c-mark {
+    order: 0;
+    width: auto;
+  }
+  .pending-table td.c-po {
+    order: 1;
+    font-size: 14px;
+  }
+  .pending-table td.c-partno {
+    order: 2;
+  }
+  .pending-table td.c-name {
+    order: 3;
+    color: var(--gray);
+  }
+  .pending-table td.c-remarks {
+    order: 8;
+    margin-top: 4px;
+  }
+  .pending-table td.c-order::before,
+  .pending-table td.c-delivery::before,
+  .pending-table td.c-prev::before,
+  .pending-table td.c-exw::before,
+  .pending-table td.c-qty::before,
+  .pending-table td.c-unit::before {
+    display: block;
+    color: var(--gray);
+    font-size: 12px;
+    font-weight: 400;
+  }
+  .pending-table td.c-order::before {
+    content: 'ORDER DATE';
+  }
+  .pending-table td.c-delivery::before {
+    content: 'DELIVERY DATE';
+  }
+  .pending-table td.c-prev::before {
+    content: 'Previous EXW';
+  }
+  .pending-table td.c-exw::before {
+    content: 'Updated EXW';
+  }
+  .pending-table td.c-qty::before {
+    content: 'QTY';
+  }
+  .pending-table td.c-unit::before {
+    content: 'UNIT';
+  }
+  .pending-table td.c-order,
+  .pending-table td.c-delivery,
+  .pending-table td.c-prev,
+  .pending-table td.c-exw,
+  .pending-table td.c-qty,
+  .pending-table td.c-unit {
+    order: 4;
+  }
+  .pending-table td.c-remarks .reason {
+    max-width: 420px;
+  }
+  .pending-table td.c-delivery:empty::after,
+  .pending-table td.c-prev:empty::after {
+    content: '–';
+    color: var(--gray);
+  }
+  .pending-table .empty-row {
+    display: block;
+  }
+  .reason select,
+  .reason input {
+    height: 36px;
+    font-size: 14px;
+  }
+  .shown {
+    margin-top: 10px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .drop {
     transition: none;
+  }
+}
+
+/* ---------- 이전·최신 나란히 비교 창 ---------- */
+
+.compare-btn {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.compare {
+  width: min(920px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  padding: 0;
+  border: 1px solid var(--light-gray);
+  border-radius: var(--radius);
+  background: var(--white);
+  color: var(--ink);
+}
+
+.compare::backdrop {
+  background: rgb(38 38 42 / 45%);
+}
+
+#compare-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px 24px 8px;
+}
+
+.cmp-head h3 {
+  margin: 6px 0 0;
+  font-size: 20px;
+  overflow-wrap: anywhere;
+}
+
+.cmp-part {
+  margin-left: 6px;
+  color: var(--gray);
+  font-size: 15px;
+  font-weight: 400;
+}
+
+.cmp-sub,
+.cmp-file {
+  margin: 2px 0 0;
+  color: var(--gray);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.cmp-note {
+  margin: 0;
+  padding: 8px 12px;
+  border-left: 3px solid var(--blue-green);
+  background: var(--blue-green-tint);
+  font-size: 13px;
+}
+
+.compare h4 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.cmp-count {
+  margin-left: 4px;
+  color: var(--gray);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.cmp-scroll {
+  margin-top: 6px;
+  overflow-x: auto;
+}
+
+.cmp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.cmp-table th,
+.cmp-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.cmp-table thead th {
+  color: var(--gray);
+  font-size: 12px;
+  font-weight: 700;
+  border-bottom-color: var(--light-gray);
+}
+
+.cmp-table .n {
+  text-align: right;
+}
+
+.cmp-table tfoot th,
+.cmp-table tfoot td {
+  border-top: 1px solid var(--light-gray);
+  border-bottom: 0;
+  font-weight: 700;
+}
+
+.cmp-table .none {
+  color: var(--gray);
+}
+
+.cmp-dates .diff {
+  font-weight: 700;
+}
+
+.cmp-state {
+  padding: 1px 7px;
+  border-radius: 4px;
+  background: var(--track);
+  color: var(--gray);
+  font-size: 12px;
+}
+
+.ds-changed .cmp-state,
+.ds-added .cmp-state,
+.ds-removed .cmp-state {
+  background: var(--blue-green-tint);
+  color: var(--blue-green-dark);
+  font-weight: 700;
+}
+
+.ds-removed td:first-child {
+  text-decoration: line-through;
+  color: var(--gray);
+}
+
+.cmp-sides {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.cmp-none {
+  margin: 6px 0 0;
+  color: var(--gray);
+  font-size: 13px;
+}
+
+.badge-same {
+  background: var(--gray);
+}
+
+.compare-foot {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 24px 16px;
+  background: var(--white);
+}
+
+.ghost {
+  height: 36px;
+  padding: 0 16px;
+  border: 1px solid var(--light-gray);
+  border-radius: 6px;
+  background: var(--white);
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+
+.ghost:hover {
+  border-color: var(--blue-green);
+}
+
+@media (max-width: 720px) {
+  .cmp-sides {
+    grid-template-columns: 1fr;
   }
 }

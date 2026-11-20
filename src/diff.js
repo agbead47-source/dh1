@@ -92,3 +92,39 @@ export function pairPrevDates(prevLines, currLines) {
     return prevLines[Math.min(i, prevLines.length - 1)].date;
   });
 }
+
+/**
+ * 한 변경 건의 이전·최신을 나란히 놓고 볼 수 있는 상세 비교.
+ * - dates: 출하일별 이전 수량과 최신 수량. state는 same | changed | added(최신에만) | removed(이전에만)
+ * - prevSources, currSources: 합산 전의 전산 등록 행(품목코드, 제조사, 수주번호, 전산 PO)
+ * - sourcesChanged: 전산 등록 행이 달라졌는가. 고객 기준으로는 same이어도 true일 수 있다(공급처 배분만 바뀐 경우)
+ */
+export function compareChange(c) {
+  const prevLines = c.prev?.lines ?? [];
+  const currLines = c.curr?.lines ?? [];
+  const qtyOn = (lines, date) => lines.find((l) => l.date === date)?.qty ?? null;
+  const allDates = [...new Set([...prevLines, ...currLines].map((l) => l.date))].sort((a, b) =>
+    // 출하일 미정('')은 맨 뒤
+    !a === !b ? (a < b ? -1 : a > b ? 1 : 0) : a ? -1 : 1,
+  );
+  const dates = allDates.map((date) => {
+    const prevQty = qtyOn(prevLines, date);
+    const currQty = qtyOn(currLines, date);
+    const state = prevQty == null ? 'added' : currQty == null ? 'removed' : prevQty === currQty ? 'same' : 'changed';
+    return { date, prevQty, currQty, diff: (currQty ?? 0) - (prevQty ?? 0), state };
+  });
+
+  const prevSources = c.prev?.sources ?? [];
+  const currSources = c.curr?.sources ?? [];
+  const sig = (list) => list.map((s) => [s.date, s.qty, s.itemCode, s.maker, s.orderNo, s.erpPo].join('|')).join('\n');
+  return {
+    dates,
+    prevTotal: c.prev ? totalQty(prevLines) : null,
+    currTotal: c.curr ? totalQty(currLines) : null,
+    qtyDiff: c.qtyDiff,
+    delayDays: c.delayDays,
+    prevSources,
+    currSources,
+    sourcesChanged: Boolean(c.prev && c.curr) && sig(prevSources) !== sig(currSources),
+  };
+}

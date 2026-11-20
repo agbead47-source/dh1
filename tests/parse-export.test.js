@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import ExcelJS from 'exceljs';
 import { parseExcel, parseWorkbook, matrixToRows } from '../src/parse.js';
-import { prepare } from '../src/normalize.js';
+import { prepare, normalizeShipped } from '../src/normalize.js';
 import { diffOrders } from '../src/diff.js';
-import { buildExportRows, buildWorkbook, exportFileName } from '../src/export.js';
+import { buildExportRows, buildShippedRows, buildWorkbook, exportFileName, fileLabelFor } from '../src/export.js';
 import prevRaw from './fixtures/prev.json';
 import currRaw from './fixtures/curr.json';
 
@@ -102,7 +102,7 @@ describe('buildExportRows', () => {
   });
 
   it('신규는 Previous EXW가 빈칸', () => {
-    expect(of('PO-1008')[0]).toMatchObject({ status: 'new', prevExw: '', remarks: '' });
+    expect(of('PO-1008')[0]).toMatchObject({ status: 'new', prevExw: '', remarks: 'NEW ORDER' });
   });
 
   it('주문 취소한 gone은 맨 아래, 출하 완료나 미선택 gone은 출력하지 않는다', () => {
@@ -121,7 +121,7 @@ describe('buildExportRows', () => {
       'ORDER DATE', 'Previous EXW', 'Updated EXW', 'SHIP TO', 'PO NO.', 'PART NO.', 'PART NAME', 'QTY', 'UNIT', 'REMARKS',
     ]);
     expect(ws.rowCount).toBe(rows.length + 1);
-    expect(ws.getRow(1).getCell(1).fill.fgColor.argb).toBe('FF007082');
+    expect(ws.getRow(1).getCell(1).fill.fgColor.argb).toBe('FFD9E1F2');
     const first = ws.getRow(2);
     expect(first.getCell(3).value).toEqual(new Date(Date.UTC(2026, 10, 18)));
     expect(first.getCell(3).numFmt).toBe('yyyy-mm-dd');
@@ -211,5 +211,215 @@ describe('Delivery Schedule(Pending Order)을 이전 파일로 읽기', () => {
     const prev = prepare(await parseExcel(await makeScheduleXlsx())).orders;
     const ch = diffOrders(prev, prepare(currRaw).orders);
     expect(ch.find((c) => c.po === 'PO-1001').reissue).toEqual({ dotted: true, newlyDotted: false, mixed: false });
+  });
+});
+
+// Shipped Orders: 이전 일정표의 시트를 넘겨받고, 출하 완료로 고른 건을 아래에 붙인다
+async function makeScheduleWithShipped() {
+  const wb = new ExcelJS.Workbook();
+  const d = (m, day) => new Date(Date.UTC(2026, m - 1, day));
+  const sh = wb.addWorksheet('Shipped Orders');
+  sh.addRow(['ORDER DATE', 'DELIVERY DATE', 'EXW', 'ETD', 'ETA', 'SHIP TO', 'Invoice No.', 'SHIPMENT MODE', 'PO NO.', 'PART NO.', 'PART NAME', 'QTY', 'UNIT', 'REMARKS']);
+  sh.addRow([d(3, 2), d(7, 1), d(7, 3), d(7, 10), d(8, 20), 'ALPHA ', 'INV-0001', 'FCL', 'PO-0901', 'A900', 'H1 12V 55W STD', 3000, 'PCS', null]);
+  sh.addRow([d(3, 9), d(7, 1), d(7, 3), d(7, 10), d(8, 20), 'BETA', 'INV-0002', 'AIR', 'PO-0902', 123400, 'H3 12V 55W STD', 500, 'PCS', 'Partial']);
+  const ws = wb.addWorksheet('Pending Order');
+  ws.addRow(['ORDER DATE', 'DELIVERY DATE', 'Previous EXW', 'Updated EXW', 'SHIP TO', 'PO NO.', 'PART NO.', 'PART NAME', 'QTY', 'UNIT', 'REMARKS']);
+  ws.addRow([d(7, 18), d(11, 10), d(11, 19), d(11, 19), 'ALPHA', 'PO-1009', 'A700', 'HB4 12V 51W STD', 800, 'PCS', null]);
+  ws.addRow([d(7, 5), d(11, 1), d(11, 18), d(11, 18), 'ALPHA', 'PO-1003', 'A300', 'H1 12V 55W STD', 2000, 'PCS', null]);
+  return wb.xlsx.writeBuffer();
+}
+
+describe('Shipped Orders', () => {
+  it('일정표의 Shipped Orders 시트를 함께 읽는다', async () => {
+    const { shipped } = await parseWorkbook(await makeScheduleWithShipped());
+    expect(normalizeShipped(shipped)).toEqual([
+      { orderDate: '2026-03-02', deliveryDate: '2026-07-01', exw: '2026-07-03', etd: '2026-07-10', eta: '2026-08-20', shipTo: 'ALPHA', invoiceNo: 'INV-0001', shipmentMode: 'FCL', po: 'PO-0901', partNo: 'A900', partName: 'H1 12V 55W STD', qty: 3000, unit: 'PCS', remarks: '' },
+      { orderDate: '2026-03-09', deliveryDate: '2026-07-01', exw: '2026-07-03', etd: '2026-07-10', eta: '2026-08-20', shipTo: 'BETA', invoiceNo: 'INV-0002', shipmentMode: 'AIR', po: 'PO-0902', partNo: '123400', partName: 'H3 12V 55W STD', qty: 500, unit: 'PCS', remarks: 'Partial' },
+    ]);
+  });
+
+  it('전산자료에는 Shipped Orders가 없다', async () => {
+    expect((await parseWorkbook(await makeXlsx())).shipped).toEqual([]);
+  });
+
+  it('선택한 납품처의 기존 출하 건을 넘겨받고, 출하 완료로 고른 건을 아래에 붙인다', async () => {
+    const wbIn = await parseWorkbook(await makeScheduleWithShipped());
+    const ch = diffOrders(prepare(wbIn.rows).orders, prepare(currRaw).orders);
+    const gone = ch.find((c) => c.po === 'PO-1009');
+    expect(gone.type).toBe('gone');
+    const shipped = normalizeShipped(wbIn.shipped);
+
+    const out = buildShippedRows({ shipTo: 'ALPHA', changes: ch, reasons: new Map([[gone.key, { code: 'shipped', text: '' }]]), shipped });
+    expect(out).toMatchObject([
+      { status: 'carried', po: 'PO-0901', invoiceNo: 'INV-0001', etd: '2026-07-10' },
+      { status: 'added', key: gone.key, po: 'PO-1009', partNo: 'A700', orderDate: '2026-07-18', deliveryDate: '2026-11-10', exw: '2026-11-19', qty: 800, unit: 'PCS', etd: '', eta: '', invoiceNo: '', shipmentMode: '', remarks: '' },
+    ]);
+
+    // 주문 취소나 미선택은 Shipped Orders에 넣지 않는다
+    for (const code of ['cancelled', '']) {
+      const rows = buildShippedRows({ shipTo: 'ALPHA', changes: ch, reasons: new Map([[gone.key, { code, text: '' }]]), shipped });
+      expect(rows.map((r) => r.po)).toEqual(['PO-0901']);
+    }
+  });
+
+  it('출하 건이 있으면 워크북에 Shipped Orders 시트를 Pending Order 앞에 넣는다', async () => {
+    const shippedRows = [
+      { status: 'carried', orderDate: '2026-03-02', deliveryDate: '2026-07-01', exw: '2026-07-03', etd: '2026-07-10', eta: '2026-08-20', shipTo: 'ALPHA', invoiceNo: 'INV-0001', shipmentMode: 'FCL', po: 'PO-0901', partNo: 'A900', partName: 'H1', qty: 3000, unit: 'PCS', remarks: '' },
+      { status: 'added', orderDate: '2026-07-18', deliveryDate: '', exw: '2026-11-19', etd: '', eta: '', shipTo: 'ALPHA', invoiceNo: '', shipmentMode: '', po: 'PO-1009', partNo: 'A700', partName: 'HB4', qty: 800, unit: 'PCS', remarks: '' },
+    ];
+    const buffer = await buildWorkbook([], { shippedRows }).xlsx.writeBuffer();
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buffer);
+    expect(wb.worksheets.map((s) => s.name)).toEqual(['Shipped Orders', 'Pending Order']);
+    const ws = wb.getWorksheet('Shipped Orders');
+    expect(ws.getRow(1).values.slice(1)).toEqual(['ORDER DATE', 'DELIVERY DATE', 'EXW', 'ETD', 'ETA', 'SHIP TO', 'Invoice No.', 'SHIPMENT MODE', 'PO NO.', 'PART NO.', 'PART NAME', 'QTY', 'UNIT', 'REMARKS']);
+    expect(ws.rowCount).toBe(3);
+    expect(ws.getRow(2).getCell(4).value).toEqual(new Date(Date.UTC(2026, 6, 10)));
+    expect(ws.getRow(3).getCell(4).value).toBeNull();
+    expect(ws.getRow(3).getCell(9).value).toBe('PO-1009');
+  });
+
+  it('출하 건이 없으면 Pending Order 시트만 만든다', () => {
+    expect(buildWorkbook([]).worksheets.map((s) => s.name)).toEqual(['Pending Order']);
+    expect(buildWorkbook([], { shippedRows: [] }).worksheets.map((s) => s.name)).toEqual(['Pending Order']);
+  });
+});
+
+describe('출하일이 빈 줄의 위치', () => {
+  it('실제 일정표처럼 출하일 미정 줄은 날짜 있는 줄 뒤, 취소 줄 앞에 둔다', () => {
+    const base = { 납품처: 'ALPHA', 고객품번: 'A1', 계획수량: 10 };
+    const prev = prepare([
+      { ...base, 고객PO번호: 'PO-3', 공장출하일: '2026-11-18' },
+      { ...base, 고객PO번호: 'PO-4', 공장출하일: '2026-11-18' },
+    ]).orders;
+    const curr = prepare([
+      { ...base, 고객PO번호: 'PO-1' },
+      { ...base, 고객PO번호: 'PO-2', 공장출하일: '2026-12-01' },
+      { ...base, 고객PO번호: 'PO-3', 공장출하일: '2026-11-18' },
+    ]).orders;
+    const ch = diffOrders(prev, curr);
+    const cancelled = new Map([[ch.find((c) => c.po === 'PO-4').key, { code: 'cancelled', text: '' }]]);
+    const out = buildExportRows({ shipTo: 'ALPHA', changes: ch, reasons: cancelled });
+    expect(out.map((r) => `${r.po}:${r.exw || '미정'}:${r.status}`)).toEqual([
+      'PO-3:2026-11-18:same',
+      'PO-2:2026-12-01:new',
+      'PO-1:미정:new',
+      'PO-4:미정:cancelled',
+    ]);
+  });
+});
+
+// 고객 발송용 설정: 전체 납품처 한 파일, 실제 양식 서식, 파일명
+describe('고객 발송용 출력', () => {
+  const changes = diffOrders(prepare(prevRaw).orders, prepare(currRaw).orders);
+  const reasons = new Map();
+
+  it('납품처를 지정하지 않으면 전체 납품처를 한 표로 낸다(출하일, 납품처, PO 순)', () => {
+    const all = buildExportRows({ shipTo: null, changes, reasons });
+    expect(new Set(all.map((r) => r.shipTo))).toEqual(new Set(['ALPHA', 'BETA']));
+    const alpha = buildExportRows({ shipTo: 'ALPHA', changes, reasons });
+    const beta = buildExportRows({ shipTo: 'BETA', changes, reasons });
+    expect(all).toHaveLength(alpha.length + beta.length);
+    const order = all.map((r) => `${r.exw}|${r.shipTo}|${r.po}`);
+    expect(order).toEqual([...order].sort());
+  });
+
+  it('전체 납품처의 Shipped Orders도 한 번에 낸다', () => {
+    const shipped = [
+      { shipTo: 'ALPHA', po: 'PO-0901', partNo: 'A900' },
+      { shipTo: 'BETA', po: 'PO-0902', partNo: 'B900' },
+    ];
+    expect(buildShippedRows({ shipTo: null, changes, reasons, shipped }).map((r) => r.po)).toEqual(['PO-0901', 'PO-0902']);
+    expect(buildShippedRows({ shipTo: 'BETA', changes, reasons, shipped }).map((r) => r.po)).toEqual(['PO-0902']);
+  });
+
+  it('신규 주문은 REMARKS에 NEW ORDER를 적는다', () => {
+    const rows = buildExportRows({ shipTo: 'ALPHA', changes, reasons });
+    expect(rows.find((r) => r.po === 'PO-1008')).toMatchObject({ status: 'new', prevExw: '', remarks: 'NEW ORDER' });
+  });
+
+  const sample = [
+    { status: 'changed', exwChanged: true, orderDate: '2026-07-01', deliveryDate: '2026-10-30', prevExw: '2026-11-18', exw: '2026-12-01', shipTo: 'ALPHA', po: 'PO-1', partNo: 'A1', partName: 'x', qty: 1000, unit: 'PCS', remarks: 'r' },
+    { status: 'new', exwChanged: false, orderDate: '2026-11-10', deliveryDate: '', prevExw: '', exw: '2026-12-04', shipTo: 'ALPHA', po: 'PO-2', partNo: 'A2', partName: 'y', qty: 2400, unit: 'PCS', remarks: 'NEW ORDER' },
+  ];
+  const fillOf = (cell) => (cell.fill?.pattern === 'solid' ? cell.fill.fgColor.argb : null);
+
+  it('고객 발송용(기본): 배경색 없이 바뀐 Updated EXW만 빨간 굵은 글자, 헤더는 실제 양식의 연한 파란색', () => {
+    const ws = buildWorkbook(sample).getWorksheet('Pending Order');
+    expect(fillOf(ws.getRow(1).getCell(1))).toBe('FFD9E1F2');
+    expect(ws.getRow(1).getCell(1).font).toMatchObject({ bold: true, name: '맑은 고딕', size: 11 });
+    expect(fillOf(ws.getRow(2).getCell(1))).toBeNull();
+    expect(fillOf(ws.getRow(3).getCell(1))).toBeNull();
+    expect(ws.getRow(2).getCell(4).font).toMatchObject({ bold: true, color: { argb: 'FFFF0000' } });
+    expect(ws.getRow(2).getCell(3).font.color).toBeUndefined();
+    expect(ws.getRow(3).getCell(4).font.color).toBeUndefined();
+    expect(ws.columns.map((c) => c.width)).toEqual([18, 21, 13, 13, 14, 26, 19, 51, 10, 6, 100]);
+  });
+
+  it('내부 검토용: 변경 줄은 노란색, 신규 줄은 초록색 배경을 더한다', () => {
+    const ws = buildWorkbook(sample, { style: 'review' }).getWorksheet('Pending Order');
+    expect(fillOf(ws.getRow(2).getCell(1))).toBe('FFFFF2CC');
+    expect(fillOf(ws.getRow(3).getCell(1))).toBe('FFE2F0D9');
+    expect(ws.getRow(2).getCell(4).font).toMatchObject({ bold: true, color: { argb: 'FFFF0000' } });
+  });
+
+  it('Shipped Orders 시트를 빼는 설정', () => {
+    const shippedRows = [{ status: 'carried', orderDate: '2026-03-02', exw: '2026-07-03', shipTo: 'ALPHA', po: 'PO-0901', partNo: 'A900', qty: 1 }];
+    expect(buildWorkbook(sample, { shippedRows }).worksheets.map((s) => s.name)).toEqual(['Shipped Orders', 'Pending Order']);
+    expect(buildWorkbook(sample, { shippedRows, includeShipped: false }).worksheets.map((s) => s.name)).toEqual(['Pending Order']);
+  });
+
+  it('파일명에 넣을 이름: 납품처를 골랐으면 납품처, 전체면 매출처에서 기호를 뺀 이름', () => {
+    expect(fileLabelFor({ shipTo: 'BETA', soldTo: 'DH-E' })).toBe('BETA');
+    expect(fileLabelFor({ shipTo: null, soldTo: 'DH-E' })).toBe('DHE');
+    expect(fileLabelFor({ shipTo: null, soldTo: '' })).toBe('ALL');
+    expect(exportFileName(fileLabelFor({ shipTo: null, soldTo: 'DH-E' }), new Date(2026, 10, 20))).toBe('DELIVERY SCHEDULE_DHE_2026.11.20.xlsx');
+  });
+
+  it('전산자료의 매출처를 읽어 가장 많은 값을 통계에 둔다', () => {
+    const rows = [
+      { 매출처: 'DH-E', 납품처: 'ALPHA', 고객PO번호: 'PO-1', 고객품번: 'A1', 계획수량: 1, 공장출하일: '2026-11-18' },
+      { 매출처: 'DH-E ', 납품처: 'BETA', 고객PO번호: 'PO-2', 고객품번: 'A1', 계획수량: 1, 공장출하일: '2026-11-18' },
+      { 매출처: 'OTHER', 납품처: 'BETA', 고객PO번호: 'PO-3', 고객품번: 'A1', 계획수량: 1, 공장출하일: '2026-11-18' },
+    ];
+    expect(prepare(rows).stats.soldTo).toBe('DH-E');
+    expect(prepare(currRaw).stats.soldTo).toBe('');
+    expect(matrixToRows([['매출처', '공장출하일', '납품처', '고객PO번호', '고객품번', '계획수량'], ['DH-E', '2026-11-18', 'A', 'P', 'X', 1]])[0]['매출처']).toBe('DH-E');
+  });
+});
+
+describe('사유가 엑셀에서 빠지지 않는다', () => {
+  it('줄이 줄었는데 남은 줄이 이전과 같아도 사유와 Previous QTY를 첫 줄에 적는다', () => {
+    const base = { 납품처: 'ALPHA', 고객PO번호: 'PO-7', 고객품번: 'A1' };
+    const prev = prepare([
+      { ...base, 공장출하일: '2026-11-18', 계획수량: 500 },
+      { ...base, 공장출하일: '2026-11-25', 계획수량: 500 },
+    ]).orders;
+    const curr = prepare([{ ...base, 공장출하일: '2026-11-25', 계획수량: 500 }]).orders;
+    const ch = diffOrders(prev, curr);
+    expect(ch[0].type).toBe('qty');
+    const out = buildExportRows({ shipTo: 'ALPHA', changes: ch, reasons: new Map([[ch[0].key, { code: 'partial', text: '' }]]) });
+    expect(out).toMatchObject([
+      { status: 'changed', exwChanged: false, exw: '2026-11-25', remarks: 'Partially shipped, balance pending / Previous total QTY 1,000' },
+    ]);
+  });
+});
+
+describe('넘겨받는 REMARKS', () => {
+  it('지난 표의 NEW ORDER는 변경 없는 줄에 넘기지 않고, 다른 문구는 넘긴다', () => {
+    const base = { 납품처: 'ALPHA', 고객품번: 'A1', 계획수량: 10, 공장출하일: '2026-11-18' };
+    const prev = prepare([
+      { ...base, 고객PO번호: 'PO-1', 이전REMARKS: 'NEW ORDER', 출처: 'schedule' },
+      { ...base, 고객PO번호: 'PO-2', 이전REMARKS: 'INV-01 (ETD 11/20)', 출처: 'schedule' },
+    ]).orders;
+    const curr = prepare([
+      { ...base, 고객PO번호: 'PO-1' },
+      { ...base, 고객PO번호: 'PO-2' },
+    ]).orders;
+    const out = buildExportRows({ shipTo: null, changes: diffOrders(prev, curr), reasons: new Map() });
+    expect(out.map((r) => [r.po, r.status, r.remarks])).toEqual([
+      ['PO-1', 'same', ''],
+      ['PO-2', 'same', 'INV-01 (ETD 11/20)'],
+    ]);
   });
 });

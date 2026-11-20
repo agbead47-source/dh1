@@ -6,6 +6,7 @@ export const SHEET_NAME = '출하계획';
 
 export const COLUMNS = [
   '공장출하일',
+  '매출처',
   '납품처',
   '고객PO번호',
   '고객품번',
@@ -36,6 +37,26 @@ export const SCHEDULE_COLUMNS = {
   'ORDER DATE': '수주일자',
   'DELIVERY DATE': '희망납기',
   REMARKS: '이전REMARKS',
+};
+
+// 일정표의 Shipped Orders 시트(이미 출하된 주문 기록). 그대로 넘겨받아 출력에 다시 넣는다.
+export const SHIPPED_SHEET_NAME = 'Shipped Orders';
+
+export const SHIPPED_COLUMNS = {
+  'ORDER DATE': 'orderDate',
+  'DELIVERY DATE': 'deliveryDate',
+  EXW: 'exw',
+  ETD: 'etd',
+  ETA: 'eta',
+  'SHIP TO': 'shipTo',
+  'Invoice No.': 'invoiceNo',
+  'SHIPMENT MODE': 'shipmentMode',
+  'PO NO.': 'po',
+  'PART NO.': 'partNo',
+  'PART NAME': 'partName',
+  QTY: 'qty',
+  UNIT: 'unit',
+  REMARKS: 'remarks',
 };
 
 const headerName = (v) => String(v ?? '').replace(/\s+/g, '').toLowerCase();
@@ -108,7 +129,8 @@ function sheetToMatrix(ws) {
  * xlsx 파일 내용(ArrayBuffer)을 읽는다.
  * - `출하계획` 시트가 있으면 전산자료(source: 'erp')
  * - 없고 `Pending Order` 시트가 있으면 고객에게 보냈던 일정표(source: 'schedule')
- * @returns {Promise<{source: 'erp'|'schedule', sheet: string, rows: object[]}>}
+ * 일정표면 `Shipped Orders` 시트의 행도 `shipped`로 함께 돌려준다(없으면 빈 배열).
+ * @returns {Promise<{source: 'erp'|'schedule', sheet: string, rows: object[], shipped: object[]}>}
  */
 export async function parseWorkbook(buffer) {
   const wb = new ExcelJS.Workbook();
@@ -119,13 +141,15 @@ export async function parseWorkbook(buffer) {
   }
 
   const erp = wb.getWorksheet(SHEET_NAME);
-  if (erp) return { source: 'erp', sheet: SHEET_NAME, rows: matrixToRows(sheetToMatrix(erp)) };
+  if (erp) return { source: 'erp', sheet: SHEET_NAME, rows: matrixToRows(sheetToMatrix(erp)), shipped: [] };
 
   const schedule = wb.getWorksheet(SCHEDULE_SHEET_NAME);
   if (schedule) {
     const rows = matrixToRows(sheetToMatrix(schedule), SCHEDULE_COLUMNS);
     for (const row of rows) row['출처'] = 'schedule';
-    return { source: 'schedule', sheet: SCHEDULE_SHEET_NAME, rows };
+    const shippedSheet = wb.getWorksheet(SHIPPED_SHEET_NAME);
+    const shipped = shippedSheet ? matrixToRows(sheetToMatrix(shippedSheet), SHIPPED_COLUMNS) : [];
+    return { source: 'schedule', sheet: SCHEDULE_SHEET_NAME, rows, shipped };
   }
 
   const names = wb.worksheets.map((s) => s.name).join(', ');

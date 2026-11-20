@@ -1,9 +1,9 @@
 // 화면 연결. 업로드 → 표준화·합산 → 비교 → Pending Order 표에서 검토 → 엑셀 다운로드.
 import { parseWorkbook } from './parse.js';
-import { prepare } from './normalize.js';
-import { diffOrders } from './diff.js';
+import { prepare, normalizeShipped } from './normalize.js';
+import { diffOrders, compareChange } from './diff.js';
 import { defaultReason, isFilled, needsReason } from './reasons.js';
-import { buildExportRows, buildWorkbook, exportFileName } from './export.js';
+import { buildExportRows, buildShippedRows, buildWorkbook, exportFileName, fileLabelFor } from './export.js';
 import * as ui from './ui/render.js';
 
 const $ = (sel) => document.querySelector(sel);
@@ -35,22 +35,37 @@ const el = {
   rows: $('#po-rows'),
   cancelled: $('#po-cancelled'),
   shown: $('#shown'),
+  tabs: $('#tabs'),
+  panes: { pending: $('#pane-pending'), shipped: $('#pane-shipped'), gone: $('#pane-gone') },
+  goneEmpty: $('#gone-empty'),
+  compare: $('#compare'),
+  compareBody: $('#compare-body'),
+  shTable: $('#sh-table'),
+  shRows: $('#sh-rows'),
+  shShown: $('#sh-shown'),
   gone: $('#gone'),
   goneTitle: $('#gone-title'),
   goneList: $('#gone-list'),
   optDelivery: $('#opt-delivery'),
+  optStyle: $('#opt-style'),
+  optShipped: $('#opt-shipped'),
+  optLabel: $('#opt-label'),
   warn: $('#export-warn'),
   download: $('#download'),
   exportFile: $('#export-file'),
 };
 
+// 고객사 선택의 "전체". 실제 일정표처럼 모든 납품처를 한 파일로 낸다.
+const ALL = '__ALL__';
+
 const state = {
-  files: { prev: null, curr: null }, // { name, source, orders, stats }
+  files: { prev: null, curr: null }, // { name, source, shipped, orders, stats }
   errors: { prev: '', curr: '' },
   changes: [],
   idByKey: new Map(), // 변경 키 → changes 순번
   reasons: new Map(), // 변경 키 → { code, text }
-  shipTo: '',
+  shipTo: ALL,
+  tab: 'pending', // 보고 있는 시트: 'pending' | 'shipped'
   view: 'changed', // 'all' 엑셀에 나가는 전체 줄 | 'changed' 변경된 주문만 | 'missing' 사유 미입력만
   filter: 'all', // 유형 필터. 보기와 함께 걸린다
   downloaded: new Set(), // 지금 내용 그대로 엑셀을 내려받은 납품처
@@ -60,11 +75,29 @@ const state = {
 
 const isReady = () => Boolean(state.files.prev && state.files.curr);
 const isChanged = (c) => c.type !== 'same';
-const forShipTo = () => state.changes.filter((c) => c.shipTo === state.shipTo);
+const inScope = (c) => state.shipTo === ALL || c.shipTo === state.shipTo;
+const forShipTo = () => state.changes.filter(inScope);
+/** 출력 함수에 넘기는 납품처. 전체면 null. */
+const scope = () => (state.shipTo === ALL ? null : state.shipTo);
+const scopeName = () => (state.shipTo === ALL ? '전체 고객사' : state.shipTo);
+
+/** 파일명에 넣을 이름. 직접 적은 값이 있으면 그것, 없으면 납품처나 매출처에서 만든다. */
+const autoLabel = () =>
+  fileLabelFor({ shipTo: scope(), soldTo: state.files.curr?.stats.soldTo || state.files.prev?.stats.soldTo });
+const fileName = () => exportFileName(el.optLabel.value.trim() || autoLabel());
 const isMissing = (c) => needsReason(c.type) && !isFilled(state.reasons.get(c.key));
 
 /** 화면의 표와 내려받는 엑셀이 같은 행을 쓴다. */
-const exportRows = () => buildExportRows({ shipTo: state.shipTo, changes: state.changes, reasons: state.reasons });
+const exportRows = () => buildExportRows({ shipTo: scope(), changes: state.changes, reasons: state.reasons });
+
+/** Shipped Orders 줄. 이전 파일이 일정표면 그 출하 기록을 넘겨받는다(최신 파일의 것은 쓰지 않는다). */
+const shippedRows = () =>
+  buildShippedRows({
+    shipTo: scope(),
+    changes: state.changes,
+    reasons: state.reasons,
+    shipped: state.files.prev?.shipped ?? [],
+  });
 
 function shipToOptions() {
   const map = new Map();
@@ -77,6 +110,13 @@ function shipToOptions() {
   return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
+/** 드롭다운 목록: 맨 위에 전체, 그 아래 납품처. */
+function selectOptions() {
+  const options = shipToOptions();
+  const sum = (key) => options.reduce((s, o) => s + o[key], 0);
+  return [{ name: ALL, label: '전체 (한 파일로)', changed: sum('changed'), missing: sum('missing') }, ...options];
+}
+
 function recompute() {
   const { prev, curr } = state.files;
   state.changes = prev && curr ? diffOrders(prev.orders, curr.orders) : [];
@@ -84,14 +124,12 @@ function recompute() {
   state.reasons = new Map(
     state.changes.filter((c) => needsReason(c.type)).map((c) => [c.key, defaultReason(c.type)]),
   );
+  state.tab = 'pending';
   state.view = 'changed';
   state.filter = 'all';
   state.downloaded.clear();
-  const options = shipToOptions();
-  if (!options.some((o) => o.name === state.shipTo)) {
-    // 변경이 가장 많은 납품처를 먼저 보여 준다
-    state.shipTo = [...options].sort((a, b) => b.changed - a.changed)[0]?.name ?? '';
-  }
+  // 실제 일정표가 전체 납품처 한 파일이라 전체를 기본으로 둔다
+  if (state.shipTo !== ALL && !shipToOptions().some((o) => o.name === state.shipTo)) state.shipTo = ALL;
   render();
 }
 
@@ -124,15 +162,17 @@ function render() {
 
 /** 고객사가 바뀌면 다시 그리는 것 전부. */
 function renderSelection() {
-  ui.renderMainHead(el.mainTitle, el.mainSub, el.scopes, state.shipTo, state.files);
+  ui.renderMainHead(el.mainTitle, el.mainSub, el.scopes, scopeName(), state.files);
   ui.renderShipChart(el.shipChart, shipToOptions(), state.shipTo);
   const delayed = forShipTo()
     .filter((c) => isChanged(c) && c.delayDays > 0)
     .sort((a, b) => b.delayDays - a.delayDays);
   ui.renderDelayChart(el.delayChart, delayed.slice(0, ui.DELAY_TOP_N), delayed.length);
-  el.exportFile.textContent = `파일명: ${exportFileName(state.shipTo)}`;
+  el.optLabel.placeholder = autoLabel();
+  el.exportFile.textContent = `파일명: ${fileName()}`;
   renderTable();
   renderGone();
+  renderShipped();
 }
 
 /** 작업 순서 3단계(올리기 → 검토 → 내려받기)가 어디까지 왔는지. progress가 null이면 아직 비교 전이다. */
@@ -184,14 +224,19 @@ function renderCounts(rows = exportRows()) {
   ui.renderReasonTools(el.reasonTools, progress);
   ui.renderTypeChart(el.typeChart, counts, state.filter);
   // 드롭다운의 고객사별 미입력 건수도 함께 갱신한다. 고르는 중에는 건드리지 않는다
-  if (document.activeElement !== el.shipTo) ui.renderShipTo(el.shipTo, shipToOptions(), state.shipTo);
+  if (document.activeElement !== el.shipTo) ui.renderShipTo(el.shipTo, selectOptions(), state.shipTo);
   ui.renderSideProgress(el.sideProgress, progress);
   renderSteps(progress);
   ui.renderExportWarn(el.warn, progress.missing);
   ui.renderShown(el.shown, el.table.querySelectorAll('tbody tr[data-id]').length, rows.length);
-
   const gone = all.filter((c) => c.type === 'gone');
-  ui.renderGoneTitle(el.goneTitle, gone.length, gone.filter(isMissing).length);
+  const goneMissing = gone.filter(isMissing).length;
+  ui.renderTabs(
+    el.tabs,
+    { pending: rows.length, shipped: shippedRows().length, gone: gone.length, goneMissing },
+    state.tab,
+  );
+  ui.renderGoneTitle(el.goneTitle, gone.length, goneMissing);
 }
 
 /** 표에 그릴 항목. 사유 입력은 주문마다 한 줄에만 둔다: 변경된 첫 줄, 없으면 첫 줄. */
@@ -240,12 +285,29 @@ function renderTable() {
   renderCounts(rows);
 }
 
-/** 이전 파일에만 있는 주문. Pending Order 줄이 아니므로 표 아래에 따로 둔다. */
+/** Shipped Orders 탭. 보기 전용이라 그 탭을 볼 때만 그린다. */
+function renderShipped() {
+  for (const [name, pane] of Object.entries(el.panes)) pane.hidden = name !== state.tab;
+  if (state.tab !== 'shipped') return;
+  const rows = shippedRows();
+  ui.renderShipped(el.shRows, rows);
+  ui.renderShippedShown(el.shShown, rows);
+  el.shTable.classList.toggle('no-delivery', !el.optDelivery.checked);
+}
+
+function setTab(tab) {
+  state.tab = tab;
+  renderShipped();
+  renderCounts();
+}
+
+/** 최신 파일에 없는 주문. 엑셀의 줄이 아니므로 확인용 탭에 따로 둔다. */
 function renderGone() {
   const items = state.changes
     .map((change, id) => ({ id, change, sel: state.reasons.get(change.key) }))
-    .filter(({ change: c }) => c.shipTo === state.shipTo && c.type === 'gone');
+    .filter(({ change: c }) => inScope(c) && c.type === 'gone');
   el.gone.hidden = !items.length;
+  el.goneEmpty.hidden = items.length > 0;
   ui.renderGone(el.goneList, items);
 }
 
@@ -254,8 +316,8 @@ function renderGone() {
 async function loadFile(slot, file) {
   state.errors[slot] = '';
   try {
-    const { source, rows } = await parseWorkbook(await file.arrayBuffer());
-    state.files[slot] = { name: file.name, source, ...prepare(rows) };
+    const { source, rows, shipped } = await parseWorkbook(await file.arrayBuffer());
+    state.files[slot] = { name: file.name, source, shipped: normalizeShipped(shipped ?? []), ...prepare(rows) };
   } catch (err) {
     console.error(err);
     state.files[slot] = null;
@@ -297,8 +359,8 @@ el.sample.addEventListener('click', async () => {
     import('../tests/fixtures/curr.json'),
   ]);
   state.errors = { prev: '', curr: '' };
-  state.files.prev = { name: '샘플_이전.xlsx (가짜 데이터)', source: 'erp', ...prepare(prev.default) };
-  state.files.curr = { name: '샘플_최신.xlsx (가짜 데이터)', source: 'erp', ...prepare(curr.default) };
+  state.files.prev = { name: '샘플_이전.xlsx (가짜 데이터)', source: 'erp', shipped: [], ...prepare(prev.default) };
+  state.files.curr = { name: '샘플_최신.xlsx (가짜 데이터)', source: 'erp', shipped: [], ...prepare(curr.default) };
   recompute();
 });
 
@@ -335,14 +397,40 @@ function setView(view) {
 }
 
 function setFilter(code) {
-  // 사라진 주문은 표의 줄이 아니다. 표 아래 구역으로 데려간다
+  // 사라진 주문은 표의 줄이 아니다. 확인용 탭으로 데려간다
   if (code === 'gone') {
-    if (!el.gone.hidden) scrollTo(el.gone);
+    setTab('gone');
+    scrollTo(el.tabs);
     return;
   }
   state.filter = code;
+  showPending();
   renderTable();
 }
+
+/** 보기와 필터는 Pending Order의 것이다. 다른 탭을 보고 있었다면 돌아온다. */
+function showPending() {
+  if (state.tab === 'pending') return;
+  state.tab = 'pending';
+  renderShipped();
+}
+
+el.tabs.addEventListener('click', (e) => {
+  const tab = e.target.closest('[data-tab]');
+  if (tab) setTab(tab.dataset.tab);
+});
+
+// 탭은 좌우 화살표와 Home, End로 옮긴다
+el.tabs.addEventListener('keydown', (e) => {
+  const tabs = [...el.tabs.querySelectorAll('[role="tab"]')];
+  const at = tabs.indexOf(document.activeElement);
+  const to = { ArrowRight: at + 1, ArrowLeft: at - 1, Home: 0, End: tabs.length - 1 }[e.key];
+  if (at < 0 || to === undefined) return;
+  e.preventDefault();
+  const next = tabs[(to + tabs.length) % tabs.length];
+  setTab(next.dataset.tab);
+  next.focus();
+});
 
 el.views.addEventListener('click', (e) => {
   const chip = e.target.closest('[data-view]');
@@ -364,6 +452,7 @@ el.typeChart.addEventListener('click', (e) => {
 el.cards.addEventListener('click', (e) => {
   if (!e.target.closest('[data-action="missing"]')) return;
   state.filter = 'all';
+  showPending();
   setView(state.view === 'missing' ? 'changed' : 'missing');
   if (state.view === 'missing') scrollTo(el.review);
 });
@@ -386,7 +475,7 @@ function onReasonInput(e) {
   input.hidden = sel.code !== 'custom';
   select.classList.toggle('is-missing', !isFilled(sel));
   if (e.target === select && sel.code === 'custom') input.focus();
-  state.downloaded.delete(state.shipTo); // 내려받은 뒤에 사유를 고치면 다시 받아야 한다
+  state.downloaded.clear(); // 내려받은 뒤에 사유를 고치면 다시 받아야 한다
 
   const rows = exportRows();
   if (change.type === 'gone') {
@@ -395,6 +484,7 @@ function onReasonInput(e) {
     holder.querySelector('.gone-note').textContent = ui.goneNote(isFilled(sel) ? sel.code : '');
     const show = state.filter === 'all' && state.view !== 'missing';
     ui.renderCancelled(el.cancelled, show ? toItems(rows).filter((i) => i.row.status === 'cancelled') : []);
+    renderShipped(); // 출하 완료로 고르면 Shipped Orders에 줄이 생긴다
   } else {
     const trs = [...el.rows.querySelectorAll(`tr[data-id="${id}"]`)];
     ui.updateOrderRows(trs, rows.filter((r) => r.key === change.key), !isFilled(sel));
@@ -407,24 +497,66 @@ for (const box of [el.rows, el.goneList]) {
   box.addEventListener('input', onReasonInput);
 }
 
+// ---------- 이전·최신 나란히 비교 ----------
+
+function openCompare(id) {
+  const change = state.changes[id];
+  if (!change) return;
+  ui.renderCompare(el.compareBody, change, compareChange(change), {
+    prev: state.files.prev?.name ?? '',
+    curr: state.files.curr?.name ?? '',
+  });
+  if (!el.compare.open) el.compare.showModal();
+  el.compare.scrollTop = 0;
+}
+
+for (const box of [el.rows, el.cancelled, el.goneList]) {
+  box.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-action="compare"]');
+    const row = btn?.closest('[data-id]');
+    if (row) openCompare(Number(row.dataset.id));
+  });
+}
+
+// 창 바깥(어두운 배경)을 누르면 닫는다
+el.compare.addEventListener('click', (e) => {
+  if (e.target === el.compare) el.compare.close();
+});
+
 // ---------- 다운로드 ----------
 
 el.optDelivery.addEventListener('change', () => {
   el.table.classList.toggle('no-delivery', !el.optDelivery.checked);
+  el.shTable.classList.toggle('no-delivery', !el.optDelivery.checked);
   state.downloaded.delete(state.shipTo);
   if (isReady()) renderCounts();
 });
 
+// 발송용 설정을 바꾸면 이미 내려받은 파일과 달라지므로 다시 받아야 한다
+for (const input of [el.optStyle, el.optShipped, el.optLabel]) {
+  input.addEventListener('input', () => {
+    state.downloaded.delete(state.shipTo);
+    if (!isReady()) return;
+    el.exportFile.textContent = `파일명: ${fileName()}`;
+    renderCounts();
+  });
+}
+
 el.download.addEventListener('click', async () => {
   el.download.disabled = true;
   try {
-    const wb = buildWorkbook(exportRows(), { includeDeliveryDate: el.optDelivery.checked });
+    const wb = buildWorkbook(exportRows(), {
+      style: el.optStyle.value,
+      includeDeliveryDate: el.optDelivery.checked,
+      includeShipped: el.optShipped.checked,
+      shippedRows: shippedRows(),
+    });
     const blob = new Blob([await wb.xlsx.writeBuffer()], {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = exportFileName(state.shipTo);
+    a.download = fileName();
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     state.downloaded.add(state.shipTo);

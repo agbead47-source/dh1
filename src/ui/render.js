@@ -64,7 +64,7 @@ export function renderShipTo(el, options, selected) {
     ? options
         .map((o) => {
           const missing = o.missing ? `, 미입력 ${num(o.missing)}건` : '';
-          return `<option value="${esc(o.name)}"${o.name === selected ? ' selected' : ''}>${esc(shipName(o.name))} (변경 ${num(o.changed)}건${missing})</option>`;
+          return `<option value="${esc(o.name)}"${o.name === selected ? ' selected' : ''}>${esc(o.label ?? shipName(o.name))} (변경 ${num(o.changed)}건${missing})</option>`;
         })
         .join('')
     : '<option>파일 2개를 올리면 고를 수 있습니다</option>';
@@ -86,7 +86,7 @@ export function renderSideProgress(el, data) {
 }
 
 export function renderExportWarn(el, missing) {
-  el.textContent = missing ? `사유 미입력 ${num(missing)}건이 남아 있습니다. 이대로 내려받을 수도 있습니다.` : '';
+  el.textContent = missing ? `사유 미입력 ${num(missing)}건. 이대로 내려받을 수도 있습니다.` : '';
 }
 
 // ---------- 본문 머리, 빈 상태 ----------
@@ -111,7 +111,7 @@ export function renderEmpty(el, files, errors, ready) {
   el.classList.toggle('is-error', failed);
   el.innerHTML = `
     <p class="empty-lead">${lead}</p>
-    <p class="empty-note">전산에서 내려받은 출하계획 엑셀의 '출하계획' 시트를 읽습니다. 실제 파일 없이 화면을 먼저 보려면
+    <p class="empty-note">이전 파일은 전산자료나 지난번에 보냈던 Delivery Schedule, 최신 파일은 전산자료를 올립니다. 실제 파일 없이 화면을 먼저 보려면
       <button type="button" class="link-btn" data-action="sample">가짜 샘플 데이터로 보기</button></p>`;
 }
 
@@ -315,6 +315,9 @@ function reasonHtml(c, sel) {
  * 표의 한 줄. 열 순서는 엑셀과 같고, 맨 앞의 "변경" 칸만 화면용이다.
  * item: { row(buildExportRows의 행), id(changes 순번), change, lead(그 주문의 첫 줄), editor(사유 입력 줄), sel }
  */
+const COMPARE_BUTTON =
+  '<button type="button" class="link-btn compare-btn" data-action="compare" aria-haspopup="dialog">이전·최신 비교</button>';
+
 function rowHtml({ row: r, id, change: c, lead, editor, sel }) {
   const cancelled = r.status === 'cancelled';
   const badge = cancelled
@@ -322,10 +325,11 @@ function rowHtml({ row: r, id, change: c, lead, editor, sel }) {
     : r.type === 'same'
       ? ''
       : `<span class="badge badge-${r.type}">${TYPE_LABELS[r.type]}</span>`;
+  const marks = badge + (lead && !cancelled ? deltaHtml(c) : '') + (lead && c ? COMPARE_BUTTON : '');
   const missing = !cancelled && needsReason(r.type) && !isFilled(sel);
   return `
     <tr class="st-${r.status}${missing ? ' is-missing' : ''}" data-id="${id}">
-      <td class="c-mark"><div class="marks">${badge}${lead && !cancelled ? deltaHtml(c) : ''}</div></td>
+      <td class="c-mark">${marks ? `<div class="marks">${marks}</div>` : ''}</td>
       <td class="c-order">${esc(r.orderDate)}</td>
       <td class="c-delivery">${esc(r.deliveryDate)}</td>
       <td class="c-prev">${esc(r.prevExw)}</td>
@@ -367,17 +371,75 @@ export function renderShown(el, shown, total) {
       : `엑셀에 나가는 ${num(total)}줄 중 ${num(shown)}줄을 보고 있습니다.`;
 }
 
+// ---------- 시트 탭, Shipped Orders 표 ----------
+
+/** 탭 이름 옆의 줄 수와 선택 상태. counts는 { pending, shipped }. */
+export function renderTabs(el, counts, active) {
+  for (const tab of el.querySelectorAll('[role="tab"]')) {
+    const on = tab.dataset.tab === active;
+    tab.setAttribute('aria-selected', String(on));
+    tab.tabIndex = on ? 0 : -1;
+    const name = tab.dataset.tab;
+    // 확인용 탭은 줄이 아니라 주문 건수를 세고, 아직 고르지 않은 건이 있으면 빨갛게 알린다
+    tab.querySelector('b').textContent = name === 'gone' ? `${num(counts.gone)}건` : `${num(counts[name])}줄`;
+    if (name === 'gone') tab.classList.toggle('is-alert', counts.goneMissing > 0);
+  }
+}
+
+/** 이번에 옮겨 적은 줄은 선적 정보가 아직 없다. 빈칸인 이유를 칸에 적어 둔다. */
+const shipCell = (value, added) => (value ? esc(value) : added ? '<span class="cell-todo">엑셀에서 입력</span>' : '');
+
+/** 읽기 전용. rows는 buildShippedRows 결과(넘겨받은 줄 carried, 이번에 추가한 줄 added). */
+export function renderShipped(el, rows) {
+  el.closest('table').classList.toggle('is-empty', !rows.length);
+  if (!rows.length) {
+    el.innerHTML =
+      '<tr class="empty-row"><td colspan="15" class="empty">출하 기록이 없습니다. 이전 파일로 지난번에 보냈던 일정표를 올리면 그 Shipped Orders를 넘겨받고, "최신 파일에 없는 주문" 탭에서 출하 완료를 고르면 여기에 줄이 생깁니다.</td></tr>';
+    return;
+  }
+  el.innerHTML = rows
+    .map((r) => {
+      const added = r.status === 'added';
+      return `
+      <tr class="${added ? 'st-new' : 'st-same'}">
+        <td class="c-mark">${added ? '<span class="badge badge-new">이번에 추가</span>' : ''}</td>
+        <td class="c-date">${esc(r.orderDate)}</td>
+        <td class="c-date c-delivery">${esc(r.deliveryDate)}</td>
+        <td class="c-date">${esc(r.exw)}</td>
+        <td class="c-date">${shipCell(r.etd, added)}</td>
+        <td class="c-date">${shipCell(r.eta, added)}</td>
+        <td>${esc(r.shipTo)}</td>
+        <td>${shipCell(r.invoiceNo, added)}</td>
+        <td>${shipCell(r.shipmentMode, added)}</td>
+        <td class="c-po">${esc(r.po)}</td>
+        <td class="c-partno">${esc(r.partNo)}</td>
+        <td class="c-name">${esc(r.partName)}</td>
+        <td class="c-qty">${num(r.qty)}</td>
+        <td class="c-unit">${esc(r.unit)}</td>
+        <td class="c-note">${esc(r.remarks)}</td>
+      </tr>`;
+    })
+    .join('');
+}
+
+export function renderShippedShown(el, rows) {
+  const added = rows.filter((r) => r.status === 'added').length;
+  el.textContent = rows.length
+    ? `넘겨받은 ${num(rows.length - added)}줄, 이번에 추가한 ${num(added)}줄. 내려받는 엑셀의 Shipped Orders 시트에 들어갑니다.`
+    : '줄이 없으면 엑셀에 Shipped Orders 시트를 만들지 않습니다.';
+}
+
 // ---------- 이전 파일에만 있는 주문 ----------
 
 const GONE_NOTES = {
   '': '골라야 합니다',
-  shipped: '엑셀에 넣지 않습니다',
-  cancelled: '표 맨 아래에 Order cancelled 줄로 들어갑니다',
+  shipped: 'Shipped Orders로 옮겨집니다',
+  cancelled: 'Pending Order 맨 아래에 Order cancelled 줄로 들어갑니다',
 };
 export const goneNote = (code) => GONE_NOTES[code] ?? '';
 
 export function renderGoneTitle(el, total, missing) {
-  el.innerHTML = `이전 파일에만 있는 주문 ${num(total)}건${missing ? ` <span class="tag is-alert">미선택 ${num(missing)}건</span>` : ''}`;
+  el.innerHTML = `확인할 주문 ${num(total)}건${missing ? ` <span class="tag is-alert">미선택 ${num(missing)}건</span>` : ''}`;
 }
 
 /** items: { id, change, sel } */
@@ -397,10 +459,83 @@ export function renderGone(el, items) {
           <div class="po">${esc(c.po)}</div>
           <div class="part"><span>${esc(c.partNo)}</span>${esc(c.partName)}</div>
           ${reissueHtml(c)}
+          ${COMPARE_BUTTON}
         </div>
         <div class="lines"><span class="visually-hidden">이전 출하 계획</span>${lines}</div>
         <div class="reason">${reasonHtml(c, sel)}<span class="gone-note">${goneNote(sel?.code ?? '')}</span></div>
       </li>`;
     })
     .join('');
+}
+
+// ---------- 이전·최신 나란히 비교 창 ----------
+
+const DATE_STATE = { same: '그대로', changed: '수량 변경', added: '새로 생김', removed: '없어짐' };
+const qtyCell = (v) => (v == null ? '<span class="none">없음</span>' : num(v));
+const diffCell = (v) => (v ? signed(v) : '');
+
+function sourcesHtml(title, fileName, order, sources) {
+  if (!order) return `<section class="cmp-side"><h4>${title}</h4><p class="cmp-file">${esc(fileName)}</p><p class="cmp-none">이 파일에는 이 주문이 없습니다.</p></section>`;
+  const body = order.fromSchedule
+    ? '<p class="cmp-none">보냈던 일정표에서 읽은 주문이라 전산 등록 행(품목코드, 제조사, 수주번호)이 없습니다.</p>'
+    : `<div class="cmp-scroll"><table class="cmp-table">
+        <thead><tr><th>출하일</th><th>전산 PO</th><th>품목코드</th><th>제조사</th><th>수주번호</th><th class="n">수량</th></tr></thead>
+        <tbody>${sources
+          .map(
+            (s) =>
+              `<tr><td>${esc(s.date || '미정')}</td><td>${esc(s.erpPo)}</td><td>${esc(s.itemCode)}</td><td>${esc(s.maker)}</td><td>${esc(s.orderNo)}</td><td class="n">${num(s.qty)}</td></tr>`,
+          )
+          .join('')}</tbody>
+      </table></div>`;
+  return `<section class="cmp-side"><h4>${title} <span class="cmp-count">${num(sources.length)}행</span></h4><p class="cmp-file">${esc(fileName)}</p>${body}</section>`;
+}
+
+/**
+ * 한 주문의 이전·최신을 나란히 보여 준다.
+ * @param {object} c 변경 건
+ * @param {object} d compareChange(c) 결과
+ * @param {{prev: string, curr: string}} names 파일 이름
+ */
+export function renderCompare(el, c, d, names) {
+  const unit = (c.curr ?? c.prev).unit;
+  const notes = [];
+  if (c.type === 'same' && d.sourcesChanged) notes.push('고객 기준으로는 변경이 없지만 전산 등록 행(공급처 배분 등)은 달라졌습니다. 고객 일정표에는 변화가 없습니다.');
+  if (c.type === 'new') notes.push('이전 파일에 없던 주문입니다.');
+  if (c.type === 'gone') notes.push('최신 파일에 없는 주문입니다. 출하 완료인지 주문 취소인지 확인이 필요합니다.');
+  if (c.reissue?.newlyDotted) notes.push('이전 파일에는 점이 없었고 최신 파일에서 PO 끝에 점을 찍어 다시 등록되었습니다(일부 출하 뒤의 잔여 재등록).');
+  if (c.reissue?.mixed) notes.push('점 있는 행과 없는 행이 한 주문으로 합산되었습니다. 두 번 더해진 것은 아닌지 아래 전산 등록 행에서 확인하세요.');
+
+  const dateRows = d.dates
+    .map(
+      (r) => `<tr class="ds-${r.state}">
+        <td>${esc(r.date || '출하일 미정')}</td>
+        <td class="n">${qtyCell(r.prevQty)}</td>
+        <td class="n">${qtyCell(r.currQty)}</td>
+        <td class="n diff">${diffCell(r.diff)}</td>
+        <td><span class="cmp-state">${DATE_STATE[r.state]}</span></td>
+      </tr>`,
+    )
+    .join('');
+
+  el.innerHTML = `
+    <header class="cmp-head">
+      <div class="marks"><span class="badge badge-${c.type === 'same' ? 'same' : c.type}">${c.type === 'same' ? '변경 없음' : TYPE_LABELS[c.type]}</span>${deltaHtml(c)}</div>
+      <h3 id="compare-title">${esc(c.po)} <span class="cmp-part">${esc(c.partNo)}</span></h3>
+      <p class="cmp-sub">${esc(shipName(c.shipTo))} · ${esc(c.partName)}</p>
+    </header>
+    ${notes.map((n) => `<p class="cmp-note">${n}</p>`).join('')}
+
+    <section>
+      <h4>고객에게 보이는 출하 계획 <span class="cmp-count">단위 ${esc(unit)}</span></h4>
+      <div class="cmp-scroll"><table class="cmp-table cmp-dates">
+        <thead><tr><th>출하일</th><th class="n">이전</th><th class="n">최신</th><th class="n">차이</th><th>상태</th></tr></thead>
+        <tbody>${dateRows}</tbody>
+        <tfoot><tr><th>합계</th><td class="n">${qtyCell(d.prevTotal)}</td><td class="n">${qtyCell(d.currTotal)}</td><td class="n diff">${diffCell(d.qtyDiff)}</td><td></td></tr></tfoot>
+      </table></div>
+    </section>
+
+    <div class="cmp-sides">
+      ${sourcesHtml('이전 파일의 전산 등록 행', names.prev, c.prev, d.prevSources)}
+      ${sourcesHtml('최신 파일의 전산 등록 행', names.curr, c.curr, d.currSources)}
+    </div>`;
 }
