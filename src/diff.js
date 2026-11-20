@@ -29,8 +29,24 @@ export function classify(prev, curr) {
 }
 
 /**
+ * PO 끝의 점(잔여 재등록 표시)으로 구별한 상태. 최신 주문 기준이고, 사라진 건은 이전 주문 기준이다.
+ * - dotted: 점 붙은 행이 있다
+ * - newlyDotted: 이전에는 점이 없다가 최신에 점이 생겼다(이번에 재등록)
+ * - mixed: 점 있는 행과 없는 행이 함께 합산되었다(중복 합산 확인 필요)
+ */
+export function reissueStatus(prev, curr) {
+  const ref = curr ?? prev;
+  const dotted = ref.dottedRows > 0;
+  return {
+    dotted,
+    newlyDotted: Boolean(prev && curr && curr.dottedRows > 0 && prev.dottedRows === 0),
+    mixed: dotted && ref.plainRows > 0,
+  };
+}
+
+/**
  * 합산한 이전·최신 주문 Map을 비교한다. 변경 없는 건(`same`)도 결과에 넣는다.
- * @returns {Array<{key, type, shipTo, po, partNo, partName, prev, curr, delayDays, qtyDiff}>}
+ * @returns {Array<{key, type, shipTo, po, partNo, partName, prev, curr, delayDays, qtyDiff, reissue}>}
  */
 export function diffOrders(prevOrders, currOrders) {
   const keys = new Set([...prevOrders.keys(), ...currOrders.keys()]);
@@ -51,6 +67,7 @@ export function diffOrders(prevOrders, currOrders) {
       curr,
       delayDays: both ? daysBetween(lastDate(prev.lines), lastDate(curr.lines)) : null,
       qtyDiff: both ? totalQty(curr.lines) - totalQty(prev.lines) : null,
+      reissue: reissueStatus(prev, curr),
     });
   }
   const firstDate = (c) => (c.curr ?? c.prev).lines[0]?.date ?? '';

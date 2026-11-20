@@ -27,9 +27,20 @@ export function toDateStr(v) {
 
 const text = (v) => (v == null ? '' : String(v).trim());
 
-/** PO번호 끝의 점을 모두 뗀다. 중간의 점은 그대로 둔다. */
+/**
+ * 고객 기준 PO: 끝의 점만 뗀 표기. 중간의 점은 그대로 둔다.
+ * 점은 "일부 출하 뒤 다시 등록한 잔여 오더"를 구별하는 내부 표시라서,
+ * 고객에게 나가는 표기와 비교 키에서만 빼고 구별 정보는 splitPo로 따로 보관한다.
+ */
 export function cleanPo(v) {
   return text(v).replace(/\.+$/, '').trim();
+}
+
+/** 전산 등록 PO(점 그대로), 고객 기준 PO, 점 여부를 함께 돌려준다. */
+export function splitPo(v) {
+  const erpPo = text(v);
+  const po = cleanPo(erpPo);
+  return { erpPo, po, dotted: po !== erpPo };
 }
 
 function toQty(v) {
@@ -44,20 +55,20 @@ export function makeKey(shipTo, po, partNo) {
 
 /**
  * 원본 행을 표준화한다. PO번호나 품번이 없는 행은 건너뛴다.
- * @returns {{rows: object[], stats: {rawCount:number, skipped:number, dotRemoved:number, noDate:number}}}
+ * `dottedRows`는 PO 끝에 점이 붙은 행(잔여 재등록) 수다.
+ * @returns {{rows: object[], stats: {rawCount:number, skipped:number, dottedRows:number, noDate:number}}}
  */
 export function normalizeRows(rawRows) {
   const rows = [];
-  const stats = { rawCount: rawRows.length, skipped: 0, dotRemoved: 0, noDate: 0 };
+  const stats = { rawCount: rawRows.length, skipped: 0, dottedRows: 0, noDate: 0 };
   for (const raw of rawRows) {
-    const rawPo = text(raw['고객PO번호']);
-    const po = cleanPo(rawPo);
+    const { erpPo, po, dotted } = splitPo(raw['고객PO번호']);
     const partNo = text(raw['고객품번']);
     if (!po || !partNo) {
       stats.skipped++;
       continue;
     }
-    if (po !== rawPo) stats.dotRemoved++;
+    if (dotted) stats.dottedRows++;
     const date = toDateStr(raw['공장출하일']);
     if (!date) stats.noDate++;
     const shipTo = text(raw['납품처']);
@@ -65,6 +76,8 @@ export function normalizeRows(rawRows) {
       key: makeKey(shipTo, po, partNo),
       shipTo,
       po,
+      erpPo,
+      dotted,
       partNo,
       partName: text(raw['고객품명']),
       date,
@@ -97,10 +110,16 @@ export function aggregate(rows) {
         partName: '',
         unit: '',
         orderDate: '',
+        erpPos: [], // 전산에 등록된 PO 표기(점 포함) 목록
+        dottedRows: 0,
+        plainRows: 0,
         byDate: new Map(),
       };
       orders.set(r.key, o);
     }
+    if (!o.erpPos.includes(r.erpPo)) o.erpPos.push(r.erpPo);
+    if (r.dotted) o.dottedRows++;
+    else o.plainRows++;
     if (!o.partName) o.partName = r.partName;
     if (!o.unit) o.unit = r.unit;
     if (r.orderDate && (!o.orderDate || r.orderDate < o.orderDate)) o.orderDate = r.orderDate;
@@ -117,6 +136,7 @@ export function aggregate(rows) {
     stats.mergedLines += all.filter((l) => l.sources > 1).length;
     o.lines = all.map(({ date, qty }) => ({ date, qty }));
     o.total = o.lines.reduce((s, l) => s + l.qty, 0);
+    o.erpPos.sort();
     delete o.byDate;
   }
   return { orders, stats };

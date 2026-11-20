@@ -54,11 +54,12 @@ describe('cleanPo', () => {
 });
 
 describe('normalizeRows', () => {
-  it('PO 끝에 점이 있는 행과 없는 행이 같은 키가 된다', () => {
+  it('PO 끝에 점이 있는 행과 없는 행이 같은 키가 되지만 점 여부는 보관한다', () => {
     const { rows, stats } = normalizeRows([row({ 고객PO번호: 'PO-1.' }), row({ 고객PO번호: 'PO-1' })]);
     expect(rows[0].key).toBe(rows[1].key);
-    expect(rows[0].po).toBe('PO-1');
-    expect(stats.dotRemoved).toBe(1);
+    expect(rows[0]).toMatchObject({ po: 'PO-1', erpPo: 'PO-1.', dotted: true });
+    expect(rows[1]).toMatchObject({ po: 'PO-1', erpPo: 'PO-1', dotted: false });
+    expect(stats.dottedRows).toBe(1);
   });
 
   it('납품처 끝 공백을 없애 같은 납품처로 묶는다', () => {
@@ -68,8 +69,8 @@ describe('normalizeRows', () => {
   });
 
   it('품번은 항상 문자열이고 앞의 0을 유지한다', () => {
-    const { rows } = normalizeRows([row({ 고객품번: '002537100000' }), row({ 고객품번: 55501 })]);
-    expect(rows[0].partNo).toBe('002537100000');
+    const { rows } = normalizeRows([row({ 고객품번: '000123400000' }), row({ 고객품번: 55501 })]);
+    expect(rows[0].partNo).toBe('000123400000');
     expect(rows[1].partNo).toBe('55501');
   });
 
@@ -86,23 +87,40 @@ describe('normalizeRows', () => {
   });
 
   it('쉼표가 든 수량 문자열을 숫자로 읽는다', () => {
-    const { rows } = normalizeRows([row({ 계획수량: '59,200' })]);
-    expect(rows[0].qty).toBe(59200);
+    const { rows } = normalizeRows([row({ 계획수량: '12,300' })]);
+    expect(rows[0].qty).toBe(12300);
   });
 });
 
 describe('aggregate', () => {
   it('같은 키, 같은 날짜, 품목코드만 다른 2행을 한 줄로 합산한다', () => {
     const { rows } = normalizeRows([
-      row({ 계획수량: 59200, 품목코드: 'FX1', 제조사: '106' }),
-      row({ 계획수량: 60800, 품목코드: 'FX2', 제조사: '110' }),
+      row({ 계획수량: 5200, 품목코드: 'FX1', 제조사: '106' }),
+      row({ 계획수량: 4800, 품목코드: 'FX2', 제조사: '110' }),
     ]);
     const { orders, stats } = aggregate(rows);
     expect(orders.size).toBe(1);
     const order = orders.get(makeKey('ALPHA', 'PO-1', 'A1'));
-    expect(order.lines).toEqual([{ date: '2026-11-18', qty: 120000 }]);
-    expect(order.total).toBe(120000);
+    expect(order.lines).toEqual([{ date: '2026-11-18', qty: 10000 }]);
+    expect(order.total).toBe(10000);
     expect(stats).toEqual({ lineCount: 1, mergedLines: 1 });
+  });
+
+  it('합산한 주문이 전산 등록 PO와 점 있는 행·없는 행 수를 갖는다', () => {
+    const { rows } = normalizeRows([
+      row({ 고객PO번호: 'PO-1.' }),
+      row({ 고객PO번호: 'PO-1.', 품목코드: 'FX2' }),
+      row({ 고객PO번호: 'PO-1' }),
+      row({ 고객PO번호: 'PO-2' }),
+    ]);
+    const { orders } = aggregate(rows);
+    expect(orders.get(makeKey('ALPHA', 'PO-1', 'A1'))).toMatchObject({
+      po: 'PO-1',
+      erpPos: ['PO-1', 'PO-1.'],
+      dottedRows: 2,
+      plainRows: 1,
+    });
+    expect(orders.get(makeKey('ALPHA', 'PO-2', 'A1'))).toMatchObject({ erpPos: ['PO-2'], dottedRows: 0, plainRows: 1 });
   });
 
   it('같은 키인데 출하일이 다르면 날짜 오름차순으로 따로 둔다', () => {
@@ -127,7 +145,7 @@ describe('prepare (fixtures)', () => {
   const { orders, stats } = prepare(prevRaw);
 
   it('정리 통계를 낸다', () => {
-    expect(stats).toMatchObject({ rawCount: 18, skipped: 2, dotRemoved: 1, lineCount: 13, mergedLines: 3 });
+    expect(stats).toMatchObject({ rawCount: 18, skipped: 2, dottedRows: 1, lineCount: 13, mergedLines: 3 });
   });
 
   it('점 있는 PO와 없는 PO를 묶어 합산한다', () => {

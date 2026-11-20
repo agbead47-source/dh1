@@ -43,7 +43,7 @@ export function renderSlot(el, file, error) {
 }
 
 function statLine(label, s) {
-  const extra = [`점 제거 ${num(s.dotRemoved)}건`, `합산 ${num(s.mergedLines)}건`];
+  const extra = [`잔여 재등록(점) ${num(s.dottedRows)}건`, `합산 ${num(s.mergedLines)}건`];
   if (s.skipped) extra.push(`빈 행 제외 ${num(s.skipped)}건`);
   if (s.noDate) extra.push(`출하일 없음 ${num(s.noDate)}건`);
   return `<p><b>${label}</b> 원본 ${num(s.rawCount)}행 → 고객 기준 ${num(s.lineCount)}행 (${extra.join(', ')})</p>`;
@@ -220,6 +220,24 @@ function linesHtml(order, unit) {
     .join('')}</div>`;
 }
 
+/** PO 끝의 점으로 구별한 잔여 재등록 표시. 전산 등록 PO(점 포함)를 함께 보여 준다. */
+function reissueHtml(c) {
+  const r = c.reissue;
+  if (!r?.dotted) return '';
+  const erp = (c.curr ?? c.prev).erpPos.map(esc).join(', ');
+  const tags = [
+    r.newlyDotted
+      ? `<span class="tag is-reissue is-new" title="이전 파일에는 점이 없었고 최신 파일에서 점을 찍어 다시 등록되었습니다">이번에 재등록</span>`
+      : `<span class="tag is-reissue" title="일부 출하 뒤 PO 끝에 점을 찍어 다시 등록한 잔여 오더입니다">잔여 재등록</span>`,
+  ];
+  if (r.mixed) {
+    tags.push(
+      `<span class="tag is-alert" title="점 있는 행과 없는 행의 수량이 한 줄로 더해졌습니다. 원래 PO의 잔여 행이 남아 두 번 더해진 것은 아닌지 확인하세요">중복 확인</span>`,
+    );
+  }
+  return `<div class="reissue">${tags.join('')}<span class="erp-po">전산 등록 ${erp}</span></div>`;
+}
+
 function tagsHtml(c) {
   const tags = [];
   if (c.delayDays > 0) {
@@ -260,6 +278,7 @@ export function renderList(el, items, reasons) {
         <div class="ident">
           <div class="po">${esc(c.po)}</div>
           <div class="part"><span>${esc(c.partNo)}</span>${esc(c.partName)}</div>
+          ${reissueHtml(c)}
         </div>
         <div class="change">
           ${linesHtml(c.prev, unit)}

@@ -747,6 +747,32 @@ button:focus-visible {
   font-weight: 700;
 }
 
+/* PO 끝의 점으로 구별한 잔여 재등록 표시 */
+.reissue {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  margin-top: 4px;
+}
+
+.tag.is-reissue {
+  background: var(--blue-green-tint);
+  color: var(--blue-green-dark);
+}
+
+.tag.is-reissue.is-new {
+  background: var(--blue-green);
+  color: var(--white);
+  font-weight: 700;
+}
+
+.erp-po {
+  color: var(--gray);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
 .reason {
   display: flex;
   flex-direction: column;

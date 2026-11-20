@@ -14,7 +14,7 @@ async function makeXlsx() {
   ws.addRow(['담당자', '고객품번', '납품처', '공장출하일', '고객PO번호', '재고', '계획수량', '수주단위', '고객품명']);
   ws.addRow(['kim', 55501, 'BETA ', new Date(Date.UTC(2026, 10, 18)), 'PO-9001.', 3, 1200, 'PCS', 'H7 12V 55W']);
   ws.addRow([]);
-  ws.addRow(['lee', '002537100000', 'BETA', new Date(Date.UTC(2026, 10, 25)), 'PO-9002', 0, 800, 'PCS', 'H4 12V']);
+  ws.addRow(['lee', '000123400000', 'BETA', new Date(Date.UTC(2026, 10, 25)), 'PO-9002', 0, 800, 'PCS', 'H4 12V']);
   wb.addWorksheet('Sheet2').addRow(['고객PO번호', '무시되는 목록']);
   return wb.xlsx.writeBuffer();
 }
@@ -33,7 +33,7 @@ describe('parseExcel', () => {
     const list = [...orders.values()];
     expect(list.map((o) => [o.shipTo, o.po, o.partNo, o.lines[0].date])).toEqual([
       ['BETA', 'PO-9001', '55501', '2026-11-18'],
-      ['BETA', 'PO-9002', '002537100000', '2026-11-25'],
+      ['BETA', 'PO-9002', '000123400000', '2026-11-25'],
     ]);
   });
 
@@ -93,6 +93,12 @@ describe('buildExportRows', () => {
       { exw: '2026-11-18', prevExw: '2026-11-18', exwChanged: false, status: 'changed', remarks: '고객과 협의' },
       { exw: '2026-12-02', prevExw: '2026-11-18', exwChanged: true, status: 'changed', remarks: '고객과 협의' },
     ]);
+  });
+
+  it('점 찍어 재등록된 주문도 고객용 PO에는 점이 없다', () => {
+    expect(rows.some((r) => r.po.endsWith('.'))).toBe(false);
+    expect(of('PO-1001')).toHaveLength(1);
+    expect(of('PO-1005')).toHaveLength(1);
   });
 
   it('신규는 Previous EXW가 빈칸', () => {

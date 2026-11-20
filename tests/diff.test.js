@@ -53,7 +53,7 @@ describe('diffOrders (fixtures)', () => {
   });
 
   it('0으로 시작하는 품번과 숫자 품번이 문자열 키로 맞춰진다', () => {
-    expect(find('ALPHA', 'PO-1010', '002537100000').type).toBe('same');
+    expect(find('ALPHA', 'PO-1010', '000123400000').type).toBe('same');
     expect(find('ALPHA', 'PO-1011', '55501').type).toBe('same');
   });
 
@@ -61,6 +61,27 @@ describe('diffOrders (fixtures)', () => {
     expect(find('BETA', 'PO-2001', 'B100').type).toBe('same');
     expect(find('BETA', 'PO-2002', 'B200')).toMatchObject({ type: 'date', delayDays: 14 });
     expect(new Set(changes.map((c) => c.shipTo))).toEqual(new Set(['ALPHA', 'BETA']));
+  });
+
+  it('점 있는 행과 없는 행이 함께 있던 주문은 중복 확인 대상으로 표시한다', () => {
+    // prev: PO-1001. 과 PO-1001 이 함께 있음 / curr: PO-1001. 만 있음
+    expect(find('ALPHA', 'PO-1001', 'A100').reissue).toEqual({ dotted: true, newlyDotted: false, mixed: false });
+    const swapped = diffOrders(prepare(currRaw).orders, prepare(prevRaw).orders);
+    const c = swapped.find((x) => x.key === makeKey('ALPHA', 'PO-1001', 'A100'));
+    expect(c.reissue).toEqual({ dotted: true, newlyDotted: false, mixed: true });
+    expect(c.curr.erpPos).toEqual(['PO-1001', 'PO-1001.']);
+  });
+
+  it('이전에 점이 없다가 최신에 점이 생기면 신규·사라짐이 아니라 같은 주문의 변경이다', () => {
+    const c = find('ALPHA', 'PO-1005', 'A400');
+    expect(c).toMatchObject({ type: 'qty', qtyDiff: -2000, po: 'PO-1005' });
+    expect(c.reissue).toEqual({ dotted: true, newlyDotted: true, mixed: false });
+    expect(c.curr.erpPos).toEqual(['PO-1005.']);
+    expect(changes.some((x) => x.po === 'PO-1005.')).toBe(false);
+  });
+
+  it('점이 없는 주문은 재등록 표시가 없다', () => {
+    expect(find('ALPHA', 'PO-1003', 'A300').reissue).toEqual({ dotted: false, newlyDotted: false, mixed: false });
   });
 
   it('유형별 건수', () => {
