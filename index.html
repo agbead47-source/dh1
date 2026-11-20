@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>배송일정 변경 비교 도구</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <div class="layout">
+      <aside class="side" aria-label="파일과 출력 설정">
+        <header class="side-head">
+          <h1>배송일정 변경 비교</h1>
+          <p>전산 출하계획 2개를 비교해 고객용 Delivery Schedule을 만듭니다. 파일은 이 PC 밖으로 전송되지 않습니다.</p>
+        </header>
+
+        <section class="side-block" aria-label="전산자료 업로드">
+          <h2 class="side-title">전산자료</h2>
+          <div class="upload">
+            <label class="drop" data-slot="prev">
+              <input type="file" accept=".xlsx" class="visually-hidden" />
+              <span class="drop-step">1. 이전 파일</span>
+              <span class="drop-body" data-role="body">이전 전산자료 엑셀을 끌어다 놓거나 눌러서 선택</span>
+            </label>
+            <button type="button" id="swap" class="swap" title="이전과 최신을 서로 바꾸기" aria-label="이전과 최신을 서로 바꾸기" disabled>⇅</button>
+            <label class="drop" data-slot="curr">
+              <input type="file" accept=".xlsx" class="visually-hidden" />
+              <span class="drop-step">2. 최신 파일</span>
+              <span class="drop-body" data-role="body">최신 전산자료 엑셀을 끌어다 놓거나 눌러서 선택</span>
+            </label>
+          </div>
+          <div id="summary-line" class="summary-line"></div>
+          <button type="button" id="sample" class="link-btn">가짜 샘플 데이터로 보기</button>
+        </section>
+
+        <section class="side-block">
+          <label class="side-title" for="ship-to">고객사(납품처)</label>
+          <select id="ship-to" disabled></select>
+          <p class="side-hint">카드, 유형·지연 차트, 변경 목록, 엑셀이 이 고객사 기준으로 바뀝니다.</p>
+        </section>
+
+        <section class="side-block side-export" aria-label="엑셀 출력">
+          <h2 class="side-title">엑셀 출력</h2>
+          <label class="check">
+            <input type="checkbox" id="opt-delivery" checked />
+            <span>DELIVERY DATE 열 포함 (값은 비워 둠)</span>
+          </label>
+          <p id="export-warn" class="warn" role="status"></p>
+          <button type="button" id="download" class="primary" disabled>Delivery Schedule 엑셀 다운로드</button>
+        </section>
+      </aside>
+
+      <main class="main">
+        <header class="main-head">
+          <h2 id="main-title">변경 현황</h2>
+          <p id="main-sub"></p>
+        </header>
+
+        <div id="empty" class="empty-state"></div>
+
+        <div id="cards" class="cards"></div>
+
+        <section class="charts" aria-label="차트">
+          <article class="panel">
+            <header class="panel-head">
+              <h3>변경 유형별 건수</h3>
+              <span class="scope" data-scope="selected"></span>
+            </header>
+            <div id="chart-type" class="chart" role="group" aria-label="변경 유형별 건수. 누르면 목록을 그 유형으로 거릅니다"></div>
+          </article>
+          <article class="panel">
+            <header class="panel-head">
+              <h3>지연이 큰 주문</h3>
+              <span class="scope" data-scope="selected"></span>
+            </header>
+            <div id="chart-delay" class="chart"></div>
+          </article>
+          <article class="panel">
+            <header class="panel-head">
+              <h3>고객사별 변경 건수</h3>
+              <span class="scope is-all">전체 고객사 기준</span>
+            </header>
+            <div id="chart-ship" class="chart chart-scroll" role="group" aria-label="고객사별 변경 건수. 누르면 그 고객사로 바꿉니다"></div>
+          </article>
+        </section>
+
+        <section id="review" class="panel list-panel" aria-label="변경 목록">
+          <header class="panel-head">
+            <h3>변경 목록</h3>
+            <span class="scope" data-scope="selected"></span>
+          </header>
+          <div id="chips" class="chips" role="group" aria-label="변경 유형 필터"></div>
+          <div class="list-head" aria-hidden="true">
+            <span>유형</span><span>주문</span><span>이전 → 최신</span><span>사유</span>
+          </div>
+          <ul id="list" class="list"></ul>
+        </section>
+      </main>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
