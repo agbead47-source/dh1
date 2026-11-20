@@ -6,6 +6,7 @@ import { defaultReason, isFilled, needsReason } from './reasons.js';
 import { buildExportRows, buildShippedRows, buildWorkbook, exportFileName, fileLabelFor } from './export.js';
 import { buildMailDraft, DEFAULT_DELAY_DAYS } from './mail.js';
 import * as ui from './ui/render.js';
+import { sortBy, nextSort } from './sort.js';
 
 const $ = (sel) => document.querySelector(sel);
 const el = {
@@ -53,6 +54,8 @@ const el = {
     copyBody: $('#copy-body'),
   },
   goneEmpty: $('#gone-empty'),
+  sortNote: $('#sort-note'),
+  shSortNote: $('#sh-sort-note'),
   compare: $('#compare'),
   compareBody: $('#compare-body'),
   shTable: $('#sh-table'),
@@ -83,6 +86,7 @@ const state = {
   tab: 'pending', // 보고 있는 탭: 'pending' | 'shipped' | 'gone' | 'mail'
   view: 'changed', // 'all' 엑셀에 나가는 전체 줄 | 'changed' 변경된 주문만 | 'missing' 사유 미입력만
   filter: 'all', // 유형 필터. 보기와 함께 걸린다
+  sort: { pending: null, shipped: null }, // 화면 표의 정렬. { key, dir } 또는 null(엑셀 순서)
   downloaded: new Set(), // 지금 내용 그대로 엑셀을 내려받은 납품처
 };
 
@@ -296,9 +300,16 @@ const EMPTY_TEXT = {
   missing: '사유를 입력하지 않은 줄이 없습니다.',
 };
 
+/** 정렬에 쓰는 값. 'delay'는 변경 칸: 지연 일수(앞당김은 음수). 변경 없는 줄은 빈 값이라 맨 뒤로 간다. */
+const pendingValue = (key) => (item) =>
+  key === 'delay' ? (item.change?.type === 'same' ? null : item.change?.delayDays) : item.row[key];
+
 function renderTable() {
   const rows = exportRows();
-  const items = toItems(rows).filter(inView);
+  const sort = state.sort.pending;
+  const visible = toItems(rows).filter(inView);
+  const items = sort ? sortBy(visible, pendingValue(sort.key), sort.dir) : visible;
+  ui.renderSort(el.table, el.sortNote, sort, sortLabel(el.table, sort));
   ui.renderTable(el.rows, items.filter((i) => i.row.status !== 'cancelled'), EMPTY_TEXT[state.view]);
   ui.renderCancelled(el.cancelled, items.filter((i) => i.row.status === 'cancelled'));
   el.table.classList.toggle('no-delivery', !el.optDelivery.checked);
@@ -309,7 +320,10 @@ function renderTable() {
 function renderShipped() {
   for (const [name, pane] of Object.entries(el.panes)) pane.hidden = name !== state.tab;
   if (state.tab !== 'shipped') return;
-  const rows = shippedRows();
+  const all = shippedRows();
+  const sort = state.sort.shipped;
+  const rows = sort ? sortBy(all, (r) => r[sort.key], sort.dir) : all;
+  ui.renderSort(el.shTable, el.shSortNote, sort, sortLabel(el.shTable, sort));
   ui.renderShipped(el.shRows, rows);
   ui.renderShippedShown(el.shShown, rows);
   el.shTable.classList.toggle('no-delivery', !el.optDelivery.checked);
@@ -516,6 +530,32 @@ for (const box of [el.rows, el.goneList]) {
   box.addEventListener('change', onReasonInput);
   box.addEventListener('input', onReasonInput);
 }
+
+// ---------- 열 정렬 ----------
+
+/** 정렬 안내에 쓸 열 이름(머리 칸의 첫 글자 줄). */
+function sortLabel(table, sort) {
+  if (!sort) return '';
+  const th = table.querySelector(`th[data-sort="${sort.key}"]`);
+  return th?.querySelector('.th-sort')?.firstChild?.textContent.trim() ?? sort.key;
+}
+
+function bindSort(table, noteEl, name, redraw) {
+  ui.initSortHeaders(table);
+  table.tHead.addEventListener('click', (e) => {
+    const th = e.target.closest('th[data-sort]');
+    if (!th || !e.target.closest('.th-sort')) return;
+    state.sort[name] = nextSort(state.sort[name], th.dataset.sort);
+    redraw();
+  });
+  noteEl.addEventListener('click', (e) => {
+    if (!e.target.closest('[data-action="sort-reset"]')) return;
+    state.sort[name] = null;
+    redraw();
+  });
+}
+bindSort(el.table, el.sortNote, 'pending', () => renderTable());
+bindSort(el.shTable, el.shSortNote, 'shipped', () => renderShipped());
 
 // ---------- 이전·최신 나란히 비교 ----------
 

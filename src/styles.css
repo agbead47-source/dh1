@@ -2356,3 +2356,50 @@ summary:focus-visible,
     margin-left: 8px;
   }
 }
+
+/* ---------- 열 정렬 ---------- */
+
+.th-sort {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+  text-align: inherit;
+  cursor: pointer;
+}
+
+.th-sort:hover {
+  text-decoration: underline;
+}
+
+.th-sort:focus-visible {
+  outline: 2px solid var(--white);
+  outline-offset: 2px;
+}
+
+.sort-arrow {
+  display: inline-block;
+  margin-left: 3px;
+  font-size: 10px;
+}
+
+.po-table th[aria-sort='ascending'],
+.po-table th[aria-sort='descending'] {
+  background: var(--blue-green-dark);
+}
+
+.sort-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  margin: 0 0 8px;
+  padding: 6px 10px;
+  border-left: 3px solid var(--blue-green);
+  background: var(--blue-green-tint);
+  font-size: 13px;
+}

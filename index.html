@@ -159,22 +159,23 @@
               <p>내려받을 엑셀과 같은 열, 같은 순서입니다. 맨 앞의 "변경" 칸만 화면용입니다. 바뀐 주문의 REMARKS 칸에서 사유를 고르면 엑셀에 들어갈 영문 문구가 바로 아래에 보입니다. "이전·최신 비교"를 누르면 그 주문의 전산 등록 행을 나란히 볼 수 있습니다.</p>
             </details>
           </div>
+          <p id="sort-note" class="sort-note" role="status" hidden></p>
           <div class="table-wrap pending-wrap" tabindex="0" role="region" aria-label="Pending Order 표. 좁으면 가로로 스크롤됩니다">
             <table id="po-table" class="po-table pending-table">
               <thead>
                 <tr>
-                  <th scope="col" class="c-mark">변경 <span class="th-note">화면에만</span></th>
-                  <th scope="col" class="c-order">ORDER DATE</th>
-                  <th scope="col" class="c-delivery">DELIVERY DATE</th>
-                  <th scope="col" class="c-prev">Previous EXW</th>
-                  <th scope="col" class="c-exw">Updated EXW</th>
-                  <th scope="col" class="c-ship">SHIP TO</th>
-                  <th scope="col" class="c-po">PO NO.</th>
-                  <th scope="col" class="c-partno">PART NO.</th>
-                  <th scope="col" class="c-name">PART NAME</th>
-                  <th scope="col" class="c-qty">QTY</th>
-                  <th scope="col" class="c-unit">UNIT</th>
-                  <th scope="col" class="c-remarks">REMARKS <span class="th-note">사유 입력</span></th>
+                  <th scope="col" data-sort="delay" class="c-mark">변경 <span class="th-note">화면에만</span></th>
+                  <th scope="col" data-sort="orderDate" class="c-order">ORDER DATE</th>
+                  <th scope="col" data-sort="deliveryDate" class="c-delivery">DELIVERY DATE</th>
+                  <th scope="col" data-sort="prevExw" class="c-prev">Previous EXW</th>
+                  <th scope="col" data-sort="exw" class="c-exw">Updated EXW</th>
+                  <th scope="col" data-sort="shipTo" class="c-ship">SHIP TO</th>
+                  <th scope="col" data-sort="po" class="c-po">PO NO.</th>
+                  <th scope="col" data-sort="partNo" class="c-partno">PART NO.</th>
+                  <th scope="col" data-sort="partName" class="c-name">PART NAME</th>
+                  <th scope="col" data-sort="qty" class="c-qty">QTY</th>
+                  <th scope="col" data-sort="unit" class="c-unit">UNIT</th>
+                  <th scope="col" data-sort="remarks" class="c-remarks">REMARKS <span class="th-note">사유 입력</span></th>
                 </tr>
               </thead>
               <tbody id="po-rows"></tbody>
@@ -186,25 +187,26 @@
 
           <div id="pane-shipped" role="tabpanel" aria-labelledby="tab-shipped" hidden>
             <p class="panel-lead">보기 전용입니다. 이전 일정표의 출하 기록 뒤에, 이번에 "출하 완료"로 고른 주문이 붙습니다.</p>
+            <p id="sh-sort-note" class="sort-note" role="status" hidden></p>
             <div class="table-wrap" tabindex="0" role="region" aria-label="Shipped Orders 표. 좁으면 가로로 스크롤됩니다">
               <table id="sh-table" class="po-table sh-table">
                 <thead>
                   <tr>
                     <th scope="col" class="c-mark">표시 <span class="th-note">화면에만</span></th>
-                    <th scope="col">ORDER DATE</th>
-                    <th scope="col" class="c-delivery">DELIVERY DATE</th>
-                    <th scope="col">EXW</th>
-                    <th scope="col">ETD</th>
-                    <th scope="col">ETA</th>
-                    <th scope="col">SHIP TO</th>
-                    <th scope="col">Invoice No.</th>
-                    <th scope="col">SHIPMENT MODE</th>
-                    <th scope="col">PO NO.</th>
-                    <th scope="col">PART NO.</th>
-                    <th scope="col">PART NAME</th>
-                    <th scope="col">QTY</th>
-                    <th scope="col">UNIT</th>
-                    <th scope="col">REMARKS</th>
+                    <th scope="col" data-sort="orderDate">ORDER DATE</th>
+                    <th scope="col" data-sort="deliveryDate" class="c-delivery">DELIVERY DATE</th>
+                    <th scope="col" data-sort="exw">EXW</th>
+                    <th scope="col" data-sort="etd">ETD</th>
+                    <th scope="col" data-sort="eta">ETA</th>
+                    <th scope="col" data-sort="shipTo">SHIP TO</th>
+                    <th scope="col" data-sort="invoiceNo">Invoice No.</th>
+                    <th scope="col" data-sort="shipmentMode">SHIPMENT MODE</th>
+                    <th scope="col" data-sort="po">PO NO.</th>
+                    <th scope="col" data-sort="partNo">PART NO.</th>
+                    <th scope="col" data-sort="partName">PART NAME</th>
+                    <th scope="col" data-sort="qty">QTY</th>
+                    <th scope="col" data-sort="unit">UNIT</th>
+                    <th scope="col" data-sort="remarks">REMARKS</th>
                   </tr>
                 </thead>
                 <tbody id="sh-rows"></tbody>

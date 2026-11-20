@@ -576,3 +576,32 @@ export function renderCompare(el, c, d, names) {
       ${sourcesHtml('최신 파일의 전산 등록 행', names.curr, c.curr, d.currSources)}
     </div>`;
 }
+
+// ---------- 열 정렬 ----------
+
+/** 머리 칸의 글자를 버튼으로 감싼다(키보드로도 누를 수 있게). 처음 한 번만 부른다. */
+export function initSortHeaders(table) {
+  for (const th of table.querySelectorAll('th[data-sort]')) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'th-sort';
+    btn.append(...th.childNodes);
+    const arrow = document.createElement('span');
+    arrow.className = 'sort-arrow';
+    arrow.setAttribute('aria-hidden', 'true');
+    btn.append(arrow);
+    th.append(btn);
+  }
+}
+
+/** 정렬 중인 열에 방향을 표시하고, 표 위에 안내와 해제 버튼을 보여 준다. sort는 { key, dir } 또는 null. */
+export function renderSort(table, noteEl, sort, label) {
+  for (const th of table.querySelectorAll('th[data-sort]')) {
+    const on = sort && th.dataset.sort === sort.key;
+    th.setAttribute('aria-sort', on ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none');
+    th.querySelector('.sort-arrow').textContent = on ? (sort.dir === 'asc' ? '▲' : '▼') : '';
+  }
+  noteEl.hidden = !sort;
+  if (!sort) return;
+  noteEl.innerHTML = `<span><b>${esc(label)}</b> ${sort.dir === 'asc' ? '오름차순' : '내림차순'}으로 보는 중입니다. 화면에서 보는 순서만 바뀌고, 엑셀은 출하일 순서로 내려받습니다.</span> <button type="button" class="link-btn" data-action="sort-reset">엑셀 순서로 되돌리기</button>`;
+}
