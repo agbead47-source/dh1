@@ -3,7 +3,7 @@ import ExcelJS from 'exceljs';
 import { parseExcel, parseWorkbook, matrixToRows } from '../src/parse.js';
 import { prepare, normalizeShipped } from '../src/normalize.js';
 import { diffOrders } from '../src/diff.js';
-import { buildExportRows, buildShippedRows, buildWorkbook, exportFileName, fileLabelFor } from '../src/export.js';
+import { buildExportRows, buildShippedRows, buildWorkbook, exportFileName, fileLabelFor, changedOnly, addedOnly } from '../src/export.js';
 import prevRaw from './fixtures/prev.json';
 import currRaw from './fixtures/curr.json';
 
@@ -421,5 +421,35 @@ describe('넘겨받는 REMARKS', () => {
       ['PO-1', 'same', ''],
       ['PO-2', 'same', 'INV-01 (ETD 11/20)'],
     ]);
+  });
+});
+
+describe('수정된 부분만 내려받기', () => {
+  const changes = diffOrders(prepare(prevRaw).orders, prepare(currRaw).orders);
+  const gone = changes.find((c) => c.type === 'gone');
+
+  it('변경 없는 줄을 빼고 변경, 신규, 취소 줄만 남긴다(순서는 그대로)', () => {
+    const reasons = new Map([[gone.key, { code: 'cancelled', text: '' }]]);
+    const all = buildExportRows({ shipTo: null, changes, reasons });
+    const only = changedOnly(all);
+    expect(only.length).toBeGreaterThan(0);
+    expect(only.every((r) => r.status !== 'same')).toBe(true);
+    expect(only).toEqual(all.filter((r) => r.status !== 'same'));
+    expect(new Set(only.map((r) => r.status))).toEqual(new Set(['changed', 'new', 'cancelled']));
+    // 변경 없는 주문은 한 줄도 들어가지 않는다
+    expect(only.some((r) => r.po === 'PO-1002')).toBe(false);
+  });
+
+  it('Shipped Orders는 이번에 옮겨 적은 줄만 남긴다', () => {
+    const reasons = new Map([[gone.key, { code: 'shipped', text: '' }]]);
+    const shipped = [{ shipTo: 'ALPHA', po: 'PO-0901', partNo: 'A900' }];
+    const rows = buildShippedRows({ shipTo: null, changes, reasons, shipped });
+    expect(rows.map((r) => r.status)).toEqual(['carried', 'added']);
+    expect(addedOnly(rows).map((r) => r.po)).toEqual([gone.po]);
+  });
+
+  it('파일명 끝에 CHANGES를 붙여 전체 파일과 구별한다', () => {
+    expect(exportFileName('DHE', new Date(2026, 10, 20), 'CHANGES')).toBe('DELIVERY SCHEDULE_DHE_2026.11.20_CHANGES.xlsx');
+    expect(exportFileName('DHE', new Date(2026, 10, 20))).toBe('DELIVERY SCHEDULE_DHE_2026.11.20.xlsx');
   });
 });

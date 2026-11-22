@@ -279,9 +279,24 @@ export function fileLabelFor({ shipTo, soldTo }) {
 }
 
 /** `DELIVERY SCHEDULE_{이름}_{YYYY.MM.DD}.xlsx` (이름은 fileLabelFor, 날짜는 생성일, 사용자 PC 기준) */
-export function exportFileName(shipTo, now = new Date()) {
+export function exportFileName(shipTo, now = new Date(), suffix = '') {
   const pad = (n) => String(n).padStart(2, '0');
   const date = `${now.getFullYear()}.${pad(now.getMonth() + 1)}.${pad(now.getDate())}`;
   const safe = shipTo.replace(/[\\/:*?"<>|]/g, '_');
-  return `DELIVERY SCHEDULE_${safe}_${date}.xlsx`;
+  return `DELIVERY SCHEDULE_${safe}_${date}${suffix ? `_${suffix}` : ''}.xlsx`;
+}
+
+// ---------- 수정된 부분만 내려받기 ----------
+
+/** 수정된 부분만 담은 파일의 이름 끝에 붙여 전체 일정표와 구별한다. */
+export const CHANGES_SUFFIX = 'CHANGES';
+
+/** Pending Order 줄 중 변경, 신규, 취소 줄만 남긴다(변경 없는 줄을 뺀다). 순서는 그대로다. */
+export function changedOnly(rows) {
+  return rows.filter((r) => r.status !== 'same');
+}
+
+/** Shipped Orders 줄 중 이번에 옮겨 적은 줄만 남긴다(넘겨받은 지난 출하 기록을 뺀다). */
+export function addedOnly(shippedRows) {
+  return shippedRows.filter((r) => r.status === 'added');
 }

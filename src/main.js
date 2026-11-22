@@ -3,7 +3,16 @@ import { parseWorkbook } from './parse.js';
 import { prepare, normalizeShipped } from './normalize.js';
 import { diffOrders, compareChange } from './diff.js';
 import { defaultReason, isFilled, needsReason } from './reasons.js';
-import { buildExportRows, buildShippedRows, buildWorkbook, exportFileName, fileLabelFor } from './export.js';
+import {
+  buildExportRows,
+  buildShippedRows,
+  buildWorkbook,
+  exportFileName,
+  fileLabelFor,
+  changedOnly,
+  addedOnly,
+  CHANGES_SUFFIX,
+} from './export.js';
 import { buildMailDraft, DEFAULT_DELAY_DAYS } from './mail.js';
 import * as ui from './ui/render.js';
 import { sortBy, nextSort } from './sort.js';
@@ -70,6 +79,8 @@ const el = {
   optLabel: $('#opt-label'),
   warn: $('#export-warn'),
   download: $('#download'),
+  downloadChanged: $('#download-changed'),
+  changedCount: $('#changed-count'),
   exportFile: $('#export-file'),
 };
 
@@ -161,6 +172,7 @@ function render() {
   el.swap.disabled = !ready;
   el.review.hidden = !ready;
   el.download.disabled = !ready;
+  if (!ready) renderChangedButton();
   ui.renderEmpty(el.empty, state.files, state.errors, ready);
 
   if (!ready) {
@@ -220,6 +232,7 @@ function renderSteps(progress) {
 
 /** 사유를 고칠 때마다 다시 계산하는 숫자들. 표는 다시 그리지 않는다(입력 포커스 유지). */
 function renderCounts(rows = exportRows()) {
+  renderChangedButton();
   const all = forShipTo();
   const changed = all.filter(isChanged);
   const progress = {
@@ -705,31 +718,50 @@ for (const input of [el.optStyle, el.optShipped, el.optLabel]) {
   });
 }
 
-el.download.addEventListener('click', async () => {
+/**
+ * 엑셀을 만들어 내려받는다. 발송용 설정(용도, 열, 시트)은 두 버튼이 같이 쓴다.
+ * @param {boolean} onlyChanged true면 수정된 부분만: 변경·신규·취소 줄과 이번에 옮겨 적은 출하 줄
+ */
+async function download(onlyChanged) {
   el.download.disabled = true;
+  el.downloadChanged.disabled = true;
   try {
-    const wb = buildWorkbook(exportRows(), {
+    const rows = exportRows();
+    const shipped = shippedRows();
+    const wb = buildWorkbook(onlyChanged ? changedOnly(rows) : rows, {
       style: el.optStyle.value,
       includeDeliveryDate: el.optDelivery.checked,
       includeShipped: el.optShipped.checked,
-      shippedRows: shippedRows(),
+      shippedRows: onlyChanged ? addedOnly(shipped) : shipped,
     });
     const blob = new Blob([await wb.xlsx.writeBuffer()], {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = fileName();
+    a.download = onlyChanged ? exportFileName(label(), new Date(), CHANGES_SUFFIX) : fileName();
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-    state.downloaded.add(state.shipTo);
+    // "내려받음" 표시는 고객에게 보낼 전체 일정표를 받았을 때만 켠다
+    if (!onlyChanged) state.downloaded.add(state.shipTo);
     renderCounts();
   } catch (err) {
     console.error(err);
     el.warn.textContent = `엑셀을 만들지 못했습니다: ${err instanceof Error ? err.message : err}`;
   } finally {
     el.download.disabled = !isReady();
+    renderChangedButton();
   }
-});
+}
+
+/** 수정된 줄이 하나도 없으면 "수정된 부분만" 버튼을 끈다. 버튼에 줄 수를 적는다. */
+function renderChangedButton() {
+  const n = isReady() ? changedOnly(exportRows()).length + addedOnly(shippedRows()).length : 0;
+  el.downloadChanged.disabled = n === 0;
+  el.changedCount.textContent = isReady() ? `${n.toLocaleString('ko-KR')}줄` : '';
+}
+
+el.download.addEventListener('click', () => download(false));
+el.downloadChanged.addEventListener('click', () => download(true));
 
 render();

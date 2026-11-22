@@ -2403,3 +2403,29 @@ summary:focus-visible,
   background: var(--blue-green-tint);
   font-size: 13px;
 }
+
+/* ---------- 수정된 부분만 다운로드 ---------- */
+
+.download-changed {
+  width: 100%;
+  height: auto;
+  min-height: 36px;
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+.download-changed b {
+  margin-left: 4px;
+  color: var(--blue-green-dark);
+  font-variant-numeric: tabular-nums;
+}
+
+.download-changed:disabled {
+  border-color: var(--line);
+  color: var(--gray);
+  cursor: default;
+}
+
+.download-changed:disabled b {
+  color: inherit;
+}
