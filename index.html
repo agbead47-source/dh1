@@ -20,7 +20,7 @@
             <a class="step-box" href="#files">
               <span class="step-mark" aria-hidden="true">1</span>
               <span class="step-text">
-                <span class="step-name">전산자료 올리기</span>
+                <span class="step-name">파일 2개 올리기</span>
                 <span class="step-status" data-role="status"></span>
               </span>
             </a>
@@ -94,26 +94,26 @@
       <!-- 1단계. 파일을 올리기 전에는 첫 화면의 중심이고, 올린 뒤에는 한 줄로 줄어든다 -->
       <section id="files" class="files" aria-labelledby="files-title">
         <div class="intro">
-          <h2 id="files-title">출하계획 엑셀 두 개를 올리면<br />바뀐 주문을 찾아 고객용 일정표로 만듭니다</h2>
+          <h2 id="files-title">보냈던 일정표와 전산자료를 올리면<br />바뀐 주문을 찾아 새 일정표로 만듭니다</h2>
           <div id="empty" class="empty-state" role="status"></div>
         </div>
 
         <div class="upload">
           <label class="drop" data-slot="prev">
             <input type="file" accept=".xlsx" class="visually-hidden" />
-            <span class="drop-step">이전 파일</span>
-            <span class="drop-body" data-role="body" data-prompt="이전 전산자료 또는 지난번에 보냈던 Delivery Schedule 엑셀을 끌어다 놓거나 눌러서 선택" aria-live="polite"></span>
+            <span class="drop-step">보냈던 일정표</span>
+            <span class="drop-body" data-role="body" data-prompt="지난번에 고객에게 보낸 Delivery Schedule 엑셀을 끌어다 놓거나 눌러서 선택" aria-live="polite"></span>
           </label>
-          <button type="button" id="swap" class="swap" title="이전·최신 서로 바꾸기" disabled>
+          <button type="button" id="swap" class="swap" title="두 파일의 자리 서로 바꾸기" disabled>
             <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
               <path d="M5 2v11M5 2 2.5 4.5M5 2l2.5 2.5M11 14V3m0 11-2.5-2.5M11 14l2.5-2.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
             </svg>
-            <span class="visually-hidden">이전·최신 서로 바꾸기</span>
+            <span class="visually-hidden">두 파일의 자리 서로 바꾸기</span>
           </button>
           <label class="drop" data-slot="curr">
             <input type="file" accept=".xlsx" class="visually-hidden" />
-            <span class="drop-step">최신 파일</span>
-            <span class="drop-body" data-role="body" data-prompt="최신 전산자료 엑셀을 끌어다 놓거나 눌러서 선택" aria-live="polite"></span>
+            <span class="drop-step">최신 전산자료</span>
+            <span class="drop-body" data-role="body" data-prompt="전산에서 방금 내려받은 출하계획 엑셀을 끌어다 놓거나 눌러서 선택" aria-live="polite"></span>
           </label>
         </div>
 
@@ -125,7 +125,7 @@
         <ol class="howto">
           <li>
             <b>올리기</b>
-            <span>전산에서 내려받은 출하계획 두 개. 이전 파일 자리에는 지난번에 보낸 일정표도 됩니다.</span>
+            <span>지난번에 고객에게 보낸 일정표와, 전산에서 방금 내려받은 출하계획.</span>
           </li>
           <li>
             <b>검토, 사유 입력</b>
@@ -189,7 +189,7 @@
             <button type="button" role="tab" id="tab-pending" class="tab" data-tab="pending" aria-controls="pane-pending" aria-selected="true">Pending Order <b></b></button>
             <button type="button" role="tab" id="tab-shipped" class="tab" data-tab="shipped" aria-controls="pane-shipped" aria-selected="false" tabindex="-1">Shipped Orders <b></b></button>
             <!-- 아래 둘은 엑셀 시트가 아니라 도구 탭이다. 시트 탭과 띄워 둔다 -->
-            <button type="button" role="tab" id="tab-gone" class="tab tab-tool" data-tab="gone" aria-controls="pane-gone" aria-selected="false" tabindex="-1">최신 파일에 없는 주문 <b></b></button>
+            <button type="button" role="tab" id="tab-gone" class="tab tab-tool" data-tab="gone" aria-controls="pane-gone" aria-selected="false" tabindex="-1">전산자료에 없는 주문 <b></b></button>
             <button type="button" role="tab" id="tab-mail" class="tab tab-tool" data-tab="mail" aria-controls="pane-mail" aria-selected="false" tabindex="-1">안내 메일</button>
           </div>
 
@@ -240,7 +240,7 @@
           </div>
 
           <div id="pane-shipped" class="pane" role="tabpanel" aria-labelledby="tab-shipped" hidden>
-            <p class="panel-lead">보기 전용입니다. 이전 일정표의 출하 기록 뒤에, 이번에 "출하 완료"로 고른 주문이 붙습니다.</p>
+            <p class="panel-lead">보기 전용입니다. 보냈던 일정표의 출하 기록 뒤에, 이번에 "출하 완료"로 고른 주문이 붙습니다.</p>
             <p id="sh-sort-note" class="sort-note" role="status" hidden></p>
             <div class="table-wrap" tabindex="0" role="region" aria-label="Shipped Orders 표. 좁으면 가로로 스크롤됩니다">
               <table id="sh-table" class="po-table sh-table">
@@ -269,16 +269,16 @@
             <p id="sh-shown" class="shown" role="status"></p>
           </div>
 
-          <!-- 엑셀 시트가 아니라 확인용 탭: 이전 파일에는 있었는데 최신 파일에는 없는 주문 -->
+          <!-- 엑셀 시트가 아니라 확인용 탭: 보냈던 일정표에는 있었는데 전산자료에는 없는 주문 -->
           <div id="pane-gone" class="pane" role="tabpanel" aria-labelledby="tab-gone" hidden>
             <div class="legend">
               <span class="legend-note">출하 완료인지 주문 취소인지 한 건씩 골라 주세요. 고르지 않은 건은 엑셀에 들어가지 않습니다.</span>
               <details class="help">
                 <summary>왜 골라야 하나요</summary>
-                <p>이전 파일에는 있었는데 최신 파일에는 없는 주문입니다. 출하되어 빠진 것인지 취소된 것인지는 파일만으로 알 수 없습니다. 출하 완료를 고르면 Shipped Orders로 옮겨지고, 주문 취소를 고르면 Pending Order 맨 아래에 Order cancelled 줄로 들어갑니다.</p>
+                <p>보냈던 일정표에는 있었는데 전산자료에는 없는 주문입니다. 출하되어 빠진 것인지 취소된 것인지는 파일만으로 알 수 없습니다. 출하 완료를 고르면 Shipped Orders로 옮겨지고, 주문 취소를 고르면 Pending Order 맨 아래에 Order cancelled 줄로 들어갑니다.</p>
               </details>
             </div>
-            <p id="gone-empty" class="empty" hidden>최신 파일에 없는 주문이 없습니다. 이전 파일의 주문이 모두 최신 파일에 있습니다.</p>
+            <p id="gone-empty" class="empty" hidden>전산자료에 없는 주문이 없습니다. 보냈던 일정표의 주문이 모두 전산자료에 있습니다.</p>
             <section id="gone" class="gone" aria-labelledby="gone-title">
               <h4 id="gone-title"></h4>
               <ul id="gone-list" class="gone-list"></ul>

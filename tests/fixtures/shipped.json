@@ -1,0 +1,5 @@
+[
+  { "orderDate": "2026-05-06", "deliveryDate": "2026-09-01", "exw": "2026-09-08", "etd": "2026-09-15", "eta": "2026-10-28", "shipTo": "ALPHA ", "invoiceNo": "INV-2609-01", "shipmentMode": "FCL", "po": "PO-0901", "partNo": "A100", "partName": "H4 12V 60/55W STD", "qty": 24000, "unit": "PCS" },
+  { "orderDate": "2026-05-06", "deliveryDate": "2026-09-01", "exw": "2026-09-08", "etd": "2026-09-15", "eta": "2026-10-28", "shipTo": "ALPHA", "invoiceNo": "INV-2609-01", "shipmentMode": "FCL", "po": "PO-0901", "partNo": "A200", "partName": "H7 12V 55W STD", "qty": 36000, "unit": "PCS" },
+  { "orderDate": "2026-06-02", "deliveryDate": "2026-10-05", "exw": "2026-10-12", "etd": "2026-10-14", "eta": "2026-10-17", "shipTo": "BETA", "invoiceNo": "INV-2610-03", "shipmentMode": "AIR", "po": "PO-0902", "partNo": "B100", "partName": "H4 12V 60/55W LONGLIFE", "qty": 1500, "unit": "PCS", "remarks": "AIR AGREED" }
+]

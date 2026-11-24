@@ -1,0 +1,27 @@
+/*
+  Pretendard (Copyright (c) 2021 Kil Hyung-jin, SIL Open Font License 1.1).
+  npm 패키지의 파일을 번들에 넣는다. 외부 글꼴 서버에 요청하지 않는다.
+  용량을 아끼려고 화면에서 쓰는 굵기 3개(400, 600, 700)의 한글 2,780자 부분 글꼴만 넣는다.
+  여기 없는 글자는 뒤따르는 맑은 고딕으로 보인다.
+*/
+@font-face {
+  font-family: 'Pretendard';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('pretendard/dist/web/static/woff2-subset/Pretendard-Regular.subset.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Pretendard';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('pretendard/dist/web/static/woff2-subset/Pretendard-SemiBold.subset.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Pretendard';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('pretendard/dist/web/static/woff2-subset/Pretendard-Bold.subset.woff2') format('woff2');
+}

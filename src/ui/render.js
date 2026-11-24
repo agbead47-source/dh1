@@ -35,10 +35,10 @@ function setHtmlKeepFocus(el, html) {
   [...el.querySelectorAll('[data-key]')].find((node) => node.dataset.key === key)?.focus();
 }
 
-// ---------- 사이드바 ----------
+// ---------- 파일 올리기, 작업 순서 ----------
 
 /** 업로드 칸. 읽은 파일의 정리 결과(원본 → 고객 기준)도 여기에 보여 준다. */
-export function renderSlot(el, file, error) {
+export function renderSlot(el, file, error, notice = '') {
   const body = el.querySelector('[data-role="body"]');
   el.classList.toggle('is-loaded', Boolean(file) && !error);
   el.classList.toggle('is-error', Boolean(error));
@@ -46,11 +46,15 @@ export function renderSlot(el, file, error) {
     body.innerHTML = `<strong>읽지 못했습니다</strong><span>${esc(error)}</span><span class="drop-again">눌러서 다른 파일을 선택하세요.</span>`;
   } else if (file) {
     const s = file.stats;
-    const extra = [`잔여 재등록(점) ${num(s.dottedRows)}건`, `합산 ${num(s.mergedLines)}건`];
+    // 일정표는 이미 고객 기준 한 줄씩이라 점과 합산 숫자가 뜻이 없다. 대신 넘겨받을 출하 기록 수를 적는다
+    const extra =
+      file.source === 'schedule'
+        ? [`출하 기록(Shipped Orders) ${num(file.shipped?.length ?? 0)}줄`]
+        : [`잔여 재등록(점) ${num(s.dottedRows)}건`, `합산 ${num(s.mergedLines)}건`];
     if (s.skipped) extra.push(`빈 행 제외 ${num(s.skipped)}건`);
     if (s.noDate) extra.push(`출하일 없음 ${num(s.noDate)}건`);
     const kind = file.source === 'schedule' ? '보냈던 일정표로 읽음' : '전산자료로 읽음';
-    body.innerHTML = `<strong>${esc(file.name)}</strong><span class="drop-kind">${kind}</span><span class="drop-stat">원본 ${num(s.rawCount)}행 → 고객 기준 ${num(s.lineCount)}행</span><span class="drop-extra">${extra.join(', ')}</span>`;
+    body.innerHTML = `<strong>${esc(file.name)}</strong><span class="drop-kind">${kind}</span><span class="drop-stat">원본 ${num(s.rawCount)}행 → 고객 기준 ${num(s.lineCount)}행</span><span class="drop-extra">${extra.join(', ')}</span>${notice ? `<span class="drop-notice">${esc(notice)}</span>` : ''}`;
   } else {
     body.textContent = body.dataset.prompt;
   }
@@ -85,12 +89,6 @@ function progressHtml(need, missing) {
     <span class="bar-track" aria-hidden="true"><span class="bar-fill" style="width:${pct(filled, need)}%"></span></span>`;
 }
 
-/** 사이드바 2단계의 진행 표시. data가 null이면 비운다. */
-export function renderSideProgress(el, data) {
-  el.innerHTML = data ? progressHtml(data.need, data.missing) : '';
-  el.classList.toggle('is-done', Boolean(data && data.need && !data.missing));
-}
-
 export function renderExportWarn(el, missing) {
   el.textContent = missing ? `사유 미입력 ${num(missing)}건. 그대로 받을 수도 있습니다.` : '';
 }
@@ -110,15 +108,12 @@ export function renderEmpty(el, files, errors, ready) {
   if (ready) return;
   const failed = Boolean(errors.prev || errors.curr);
   let lead;
-  if (failed) lead = '파일을 읽지 못했습니다. 빨갛게 표시된 칸의 안내를 보고 전산 출하계획 엑셀(.xlsx)을 다시 올려 주세요.';
-  else if (!files.prev && !files.curr) lead = '이전 파일과 최신 파일을 올리면 바뀐 주문이 여기에 정리됩니다.';
-  else if (files.prev) lead = '이전 파일을 읽었습니다. 최신 파일을 올려 주세요.';
-  else lead = '최신 파일을 읽었습니다. 이전 파일을 올려 주세요.';
+  if (failed) lead = '파일을 읽지 못했습니다. 빨갛게 표시된 칸의 안내를 보고 엑셀 파일(.xlsx)을 다시 올려 주세요.';
+  else if (!files.prev && !files.curr) lead = '지난번에 고객에게 보낸 일정표와 전산에서 방금 내려받은 출하계획을 아래 두 칸에 올려 주세요. 파일은 이 PC의 브라우저 안에서만 읽습니다.';
+  else if (files.prev) lead = '보냈던 일정표를 읽었습니다. 최신 전산자료를 올려 주세요.';
+  else lead = '전산자료를 읽었습니다. 지난번에 보냈던 일정표를 올려 주세요.';
   el.classList.toggle('is-error', failed);
-  el.innerHTML = `
-    <p class="empty-lead">${lead}</p>
-    <p class="empty-note">이전 파일은 전산자료나 지난번에 보냈던 Delivery Schedule, 최신 파일은 전산자료를 올립니다. 실제 파일 없이 화면을 먼저 보려면
-      <button type="button" class="link-btn" data-action="sample">가짜 샘플 데이터로 보기</button></p>`;
+  el.innerHTML = `<p class="empty-lead">${lead}</p>`;
 }
 
 // ---------- 요약 카드 ----------
@@ -142,7 +137,7 @@ export function renderCards(el, data, view) {
     return `<button type="button" class="${cls}${todo} card-btn" data-action="missing" data-key="missing" aria-pressed="${onlyMissing}">${inner}${act ? `<span class="card-act">${act}</span>` : ''}</button>`;
   };
   // 사유 미입력에는 표에 줄이 없는 "최신 파일에 없는 주문"도 들어 있다. 어디서 고르는지 적어 둔다
-  const inGone = d.goneMissing ? `. ${num(d.goneMissing)}건은 '최신 파일에 없는 주문' 탭` : '';
+  const inGone = d.goneMissing ? `. ${num(d.goneMissing)}건은 '전산자료에 없는 주문' 탭` : '';
   const missingSub = !d.need
     ? '사유가 필요한 건 없음'
     : d.missing
@@ -278,7 +273,7 @@ function reissueHtml(c) {
   const erp = (c.curr ?? c.prev).erpPos.map(esc).join(', ');
   const label = r.newlyDotted ? '이번에 재등록' : '잔여 재등록';
   const help = r.newlyDotted
-    ? '이전 파일에는 점이 없었고, 최신 파일에서 PO 끝에 점을 찍어 다시 등록된 주문입니다.'
+    ? '지난번 전산자료에는 점이 없었고, 이번 전산자료에서 PO 끝에 점을 찍어 다시 등록된 주문입니다.'
     : '일부 출하 뒤 PO 끝에 점을 찍어 다시 등록한 잔여 오더입니다.';
   const mixed = r.mixed
     ? '<p class="is-alert">점 있는 행과 없는 행의 수량이 한 줄로 더해졌습니다. 원래 PO의 잔여 행이 남아 두 번 더해진 것은 아닌지 전산에서 확인하세요.</p>'
@@ -326,7 +321,7 @@ function reasonHtml(c, sel) {
  * item: { row(buildExportRows의 행), id(changes 순번), change, lead(그 주문의 첫 줄), editor(사유 입력 줄), sel }
  */
 const COMPARE_BUTTON =
-  '<button type="button" class="link-btn compare-btn" data-action="compare" aria-haspopup="dialog">이전·최신 비교</button>';
+  '<button type="button" class="link-btn compare-btn" data-action="compare" aria-haspopup="dialog">일정표·전산 비교</button>';
 
 function rowHtml({ row: r, id, change: c, lead, editor, sel }) {
   const cancelled = r.status === 'cancelled';
@@ -407,7 +402,7 @@ export function renderShipped(el, rows) {
   el.closest('table').classList.toggle('is-empty', !rows.length);
   if (!rows.length) {
     el.innerHTML =
-      '<tr class="empty-row"><td colspan="15" class="empty">출하 기록이 없습니다. 이전 파일로 지난번에 보냈던 일정표를 올리면 그 Shipped Orders를 넘겨받고, "최신 파일에 없는 주문" 탭에서 출하 완료를 고르면 여기에 줄이 생깁니다.</td></tr>';
+      '<tr class="empty-row"><td colspan="15" class="empty">출하 기록이 없습니다. 보냈던 일정표에 Shipped Orders 시트가 있으면 그 기록을 넘겨받고, "최신 파일에 없는 주문" 탭에서 출하 완료를 고르면 여기에 줄이 생깁니다.</td></tr>';
     return;
   }
   el.innerHTML = rows
@@ -473,7 +468,7 @@ export function renderGone(el, items, showShip = false) {
           <div class="part"><span>${esc(c.partNo)}</span>${esc(c.partName)}</div>
           <div class="po-sub">${reissueHtml(c)}${COMPARE_BUTTON}</div>
         </div>
-        <div class="lines"><span class="visually-hidden">이전 출하 계획</span>${lines}</div>
+        <div class="lines"><span class="visually-hidden">보냈던 일정표의 출하 계획</span>${lines}</div>
         <div class="reason">${reasonHtml(c, sel)}<span class="gone-note">${goneNote(sel?.code ?? '')}</span></div>
       </li>`;
     })
@@ -537,9 +532,9 @@ export function renderCompare(el, c, d, names) {
   const unit = (c.curr ?? c.prev).unit;
   const notes = [];
   if (c.type === 'same' && d.sourcesChanged) notes.push('고객 기준으로는 변경이 없지만 전산 등록 행(공급처 배분 등)은 달라졌습니다. 고객 일정표에는 변화가 없습니다.');
-  if (c.type === 'new') notes.push('이전 파일에 없던 주문입니다.');
-  if (c.type === 'gone') notes.push('최신 파일에 없는 주문입니다. 출하 완료인지 주문 취소인지 확인이 필요합니다.');
-  if (c.reissue?.newlyDotted) notes.push('이전 파일에는 점이 없었고 최신 파일에서 PO 끝에 점을 찍어 다시 등록되었습니다(일부 출하 뒤의 잔여 재등록).');
+  if (c.type === 'new') notes.push('보냈던 일정표에 없던 주문입니다.');
+  if (c.type === 'gone') notes.push('전산자료에 없는 주문입니다. 출하 완료인지 주문 취소인지 확인이 필요합니다.');
+  if (c.reissue?.newlyDotted) notes.push('지난번 전산자료에는 점이 없었고 이번 전산자료에서 PO 끝에 점을 찍어 다시 등록되었습니다(일부 출하 뒤의 잔여 재등록).');
   if (c.reissue?.mixed) notes.push('점 있는 행과 없는 행이 한 주문으로 합산되었습니다. 두 번 더해진 것은 아닌지 아래 전산 등록 행에서 확인하세요.');
 
   const dateRows = d.dates
@@ -565,15 +560,15 @@ export function renderCompare(el, c, d, names) {
     <section>
       <h4>고객에게 보이는 출하 계획 <span class="cmp-count">단위 ${esc(unit)}</span></h4>
       <div class="cmp-scroll"><table class="cmp-table cmp-dates">
-        <thead><tr><th>출하일</th><th class="n">이전</th><th class="n">최신</th><th class="n">차이</th><th>상태</th></tr></thead>
+        <thead><tr><th>출하일</th><th class="n">보냈던 일정표</th><th class="n">전산자료</th><th class="n">차이</th><th>상태</th></tr></thead>
         <tbody>${dateRows}</tbody>
         <tfoot><tr><th>합계</th><td class="n">${qtyCell(d.prevTotal)}</td><td class="n">${qtyCell(d.currTotal)}</td><td class="n diff">${diffCell(d.qtyDiff)}</td><td></td></tr></tfoot>
       </table></div>
     </section>
 
     <div class="cmp-sides">
-      ${sourcesHtml('이전 파일의 전산 등록 행', names.prev, c.prev, d.prevSources)}
-      ${sourcesHtml('최신 파일의 전산 등록 행', names.curr, c.curr, d.currSources)}
+      ${sourcesHtml('보냈던 일정표 쪽', names.prev, c.prev, d.prevSources)}
+      ${sourcesHtml('전산자료의 등록 행', names.curr, c.curr, d.currSources)}
     </div>`;
 }
 

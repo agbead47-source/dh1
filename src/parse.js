@@ -162,3 +162,19 @@ export async function parseWorkbook(buffer) {
 export async function parseExcel(buffer) {
   return (await parseWorkbook(buffer)).rows;
 }
+
+// ---------- 올리는 칸과 파일 종류 ----------
+
+// 기본 흐름은 "지난번에 고객에게 보낸 배송일정표(이전) × 최신 전산자료(최신)"다.
+export const EXPECTED_SOURCE = { prev: 'schedule', curr: 'erp' };
+
+/**
+ * 올린 파일의 종류가 그 칸이 기대하는 종류와 다를 때 보여 줄 안내. 맞으면 빈 문자열.
+ * 막지는 않는다(전산자료끼리, 일정표끼리 비교해 보는 것도 가능하다).
+ */
+export function slotNotice(slot, source) {
+  if (!source || EXPECTED_SOURCE[slot] === source) return '';
+  return slot === 'prev'
+    ? '전산자료를 올렸습니다. 이 칸에는 보통 지난번에 보냈던 일정표를 올립니다. 이대로 두면 고객 희망 납기와 지난 REMARKS를 넘겨받지 못합니다.'
+    : '일정표를 올렸습니다. 이 칸에는 보통 전산에서 내려받은 전산자료를 올립니다.';
+}

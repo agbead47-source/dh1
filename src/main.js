@@ -1,5 +1,5 @@
 // 화면 연결. 업로드 → 표준화·합산 → 비교 → Pending Order 표에서 검토 → 엑셀 다운로드.
-import { parseWorkbook } from './parse.js';
+import { parseWorkbook, slotNotice } from './parse.js';
 import { prepare, normalizeShipped } from './normalize.js';
 import { diffOrders, compareChange } from './diff.js';
 import { defaultReason, isFilled, needsReason } from './reasons.js';
@@ -27,7 +27,7 @@ const el = {
     review: $('[data-step="review"]'),
     export: $('[data-step="export"]'),
   },
-  sideProgress: $('#side-progress'),
+  work: $('#work'),
   review: $('#review'),
   empty: $('#empty'),
   mainTitle: $('#main-title'),
@@ -82,6 +82,9 @@ const el = {
   downloadChanged: $('#download-changed'),
   changedCount: $('#changed-count'),
   exportFile: $('#export-file'),
+  exportOpen: $('#export-open'),
+  exportPanel: $('#export-panel'),
+  exportClose: $('#export-close'),
 };
 
 // 고객사 선택의 "전체". 실제 일정표처럼 모든 납품처를 한 파일로 낸다.
@@ -167,10 +170,12 @@ function recompute() {
 // ---------- 그리기 ----------
 
 function render() {
-  for (const slot of ['prev', 'curr']) ui.renderSlot(el.slots[slot], state.files[slot], state.errors[slot]);
+  for (const slot of ['prev', 'curr']) ui.renderSlot(el.slots[slot], state.files[slot], state.errors[slot], slotNotice(slot, state.files[slot]?.source));
   const ready = isReady();
   el.swap.disabled = !ready;
-  el.review.hidden = !ready;
+  el.work.hidden = !ready;
+  // 파일을 다 올리면 첫 화면의 큰 업로드 영역이 한 줄로 줄어든다
+  document.body.classList.toggle('is-ready', ready);
   el.download.disabled = !ready;
   if (!ready) renderChangedButton();
   ui.renderEmpty(el.empty, state.files, state.errors, ready);
@@ -183,7 +188,6 @@ function render() {
     ui.renderTypeChart(el.typeChart, null);
     ui.renderDelayChart(el.delayChart, null);
     ui.renderShipChart(el.shipChart, null);
-    ui.renderSideProgress(el.sideProgress, null);
     ui.renderExportWarn(el.warn, 0);
     renderSteps(null);
     el.exportFile.textContent = '파일 2개를 올리면 내려받을 수 있습니다.';
@@ -263,7 +267,6 @@ function renderCounts(rows = exportRows()) {
   ui.renderTypeChart(el.typeChart, counts, state.filter);
   // 드롭다운의 고객사별 미입력 건수도 함께 갱신한다. 고르는 중에는 건드리지 않는다
   if (document.activeElement !== el.shipTo) ui.renderShipTo(el.shipTo, selectOptions(), state.shipTo);
-  ui.renderSideProgress(el.sideProgress, progress);
   renderSteps(progress);
   ui.renderExportWarn(el.warn, progress.missing);
   ui.renderShown(el.shown, el.table.querySelectorAll('tbody tr[data-id]').length, rows.length);
@@ -401,19 +404,21 @@ el.swap.addEventListener('click', () => {
 });
 
 el.sample.addEventListener('click', async () => {
-  const [prev, curr] = await Promise.all([
-    import('../tests/fixtures/prev.json'),
+  // 기본 흐름 그대로: 보냈던 일정표(출하 기록 포함) × 최신 전산자료
+  const [schedule, shipped, erp] = await Promise.all([
+    import('../tests/fixtures/schedule.json'),
+    import('../tests/fixtures/shipped.json'),
     import('../tests/fixtures/curr.json'),
   ]);
   state.errors = { prev: '', curr: '' };
-  state.files.prev = { name: '샘플_이전.xlsx (가짜 데이터)', source: 'erp', shipped: [], ...prepare(prev.default) };
-  state.files.curr = { name: '샘플_최신.xlsx (가짜 데이터)', source: 'erp', shipped: [], ...prepare(curr.default) };
+  state.files.prev = {
+    name: '샘플_보냈던 일정표.xlsx (가짜 데이터)',
+    source: 'schedule',
+    shipped: normalizeShipped(shipped.default),
+    ...prepare(schedule.default),
+  };
+  state.files.curr = { name: '샘플_전산자료.xlsx (가짜 데이터)', source: 'erp', shipped: [], ...prepare(erp.default) };
   recompute();
-});
-
-// 빈 상태 안내의 샘플 버튼은 사이드바의 샘플 버튼과 같은 일을 한다
-el.empty.addEventListener('click', (e) => {
-  if (e.target.closest('[data-action="sample"]')) el.sample.click();
 });
 
 // ---------- 검토 화면 ----------
@@ -762,6 +767,33 @@ function renderChangedButton() {
 }
 
 el.download.addEventListener('click', () => download(false));
+
+// ---------- 내려받기 창 ----------
+
+/** 위쪽 3단계 버튼 아래에 열리는 창. 발송용 설정과 다운로드 버튼이 함께 들어 있다. */
+function setExportOpen(open) {
+  el.exportPanel.hidden = !open;
+  el.exportOpen.setAttribute('aria-expanded', String(open));
+}
+
+el.exportOpen.addEventListener('click', () => setExportOpen(el.exportPanel.hidden));
+el.exportClose.addEventListener('click', () => {
+  setExportOpen(false);
+  el.exportOpen.focus();
+});
+
+// 창 밖을 누르거나 Esc를 누르면 닫는다
+document.addEventListener('pointerdown', (e) => {
+  if (el.exportPanel.hidden) return;
+  if (el.exportPanel.contains(e.target) || el.exportOpen.contains(e.target)) return;
+  setExportOpen(false);
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape' || el.exportPanel.hidden || el.compare.open) return;
+  const inside = el.exportPanel.contains(document.activeElement);
+  setExportOpen(false);
+  if (inside) el.exportOpen.focus();
+});
 el.downloadChanged.addEventListener('click', () => download(true));
 
 render();
